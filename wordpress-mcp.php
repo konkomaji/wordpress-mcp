@@ -1,0 +1,49 @@
+<?php
+/**
+ * Plugin Name:       WordPress MCP
+ * Plugin URI:        https://github.com/konkomaji/wordpress-mcp
+ * Description:        Universal Model Context Protocol (MCP) server for WordPress. Connects any client site to Claude (chat & Claude Code) for hands-on SEO / AEO / GEO work — engine-agnostic Yoast or RankMath, WooCommerce product SEO, Google Site Kit search & analytics data, JSON-LD schema, llms.txt, and full content publishing. Built for digital marketers and SEO agencies.
+ * Version:           1.0.0
+ * Requires at least: 5.6
+ * Requires PHP:      7.4
+ * Author:            Konko Maji
+ * Author URI:        https://www.linkedin.com/in/konkomaji/
+ * License:           GPL-2.0-or-later
+ * License URI:       https://www.gnu.org/licenses/gpl-2.0.html
+ * Text Domain:       wordpress-mcp
+ *
+ * WordPress MCP — built by Konko Maji (https://www.linkedin.com/in/konkomaji/).
+ *
+ * @package WordPressMCP
+ */
+
+if ( ! defined( 'ABSPATH' ) ) {
+	exit;
+}
+
+define( 'WPMCP_VERSION', '1.0.0' );
+define( 'WPMCP_NAMESPACE', 'wp-mcp/v1' );
+define( 'WPMCP_OPTION', 'wpmcp_settings' );
+define( 'WPMCP_FILE', __FILE__ );
+define( 'WPMCP_DIR', plugin_dir_path( __FILE__ ) );
+define( 'WPMCP_URL', plugin_dir_url( __FILE__ ) );
+define( 'WPMCP_AUTHOR_URL', 'https://www.linkedin.com/in/konkomaji/' );
+
+require_once WPMCP_DIR . 'includes/class-wpmcp-settings.php';
+require_once WPMCP_DIR . 'includes/class-wpmcp-seo.php';
+require_once WPMCP_DIR . 'includes/class-wpmcp-sitekit.php';
+require_once WPMCP_DIR . 'includes/class-wpmcp-tools.php';
+require_once WPMCP_DIR . 'includes/class-wpmcp-rest.php';
+require_once WPMCP_DIR . 'includes/class-wpmcp-frontend.php';
+require_once WPMCP_DIR . 'includes/class-wpmcp-admin.php';
+require_once WPMCP_DIR . 'includes/class-wpmcp-plugin.php';
+
+/**
+ * Boot the plugin once all dependencies are loaded.
+ */
+function wpmcp() {
+	return WPMCP_Plugin::instance();
+}
+wpmcp();
+
+register_activation_hook( __FILE__, [ 'WPMCP_Settings', 'on_activation' ] );
