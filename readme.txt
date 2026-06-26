@@ -5,7 +5,7 @@ Tags: mcp, seo, ai, claude, woocommerce
 Requires at least: 5.6
 Tested up to: 6.5
 Requires PHP: 7.4
-Stable tag: 1.0.0
+Stable tag: 1.1.0
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -59,10 +59,17 @@ No. The plugin is a server — Claude connects in. Site Kit data, when used, is 
 
 == Changelog ==
 
+= 1.1.0 =
+* Claude.ai chat connector support: the API key can now be passed in the endpoint URL (`?key=...`), so the site can be added as a custom connector in Claude chat, which provides no header field. Claude Code Bearer/header auth is unchanged. The settings screen now shows a ready-to-paste chat connector URL.
+* Google Site Kit: the bridge now resolves the administrator who is actually connected to Google (instead of the first admin found), so data requests stop silently failing. Integration status now verifies and reports the real connection state ("connected" / "active — not connected") and lists active modules. Site Kit errors are surfaced with the underlying cause instead of being swallowed.
+
 = 1.0.0 =
 * Initial release. JSON-RPC MCP endpoint, ~46 tools, engine-agnostic SEO, WooCommerce, Google Site Kit, JSON-LD, llms.txt, capability groups, Material 3 admin UI.
 
 == Upgrade Notice ==
+
+= 1.1.0 =
+Adds Claude chat connector support (key-in-URL) and fixes Google Site Kit data not loading when the connected admin was not the first administrator.
 
 = 1.0.0 =
 Initial release.

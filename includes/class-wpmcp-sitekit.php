@@ -20,6 +20,13 @@ if ( ! defined( 'ABSPATH' ) ) {
 class WPMCP_SiteKit {
 
 	/**
+	 * Per-request cache of the resolved connected user ID.
+	 *
+	 * @var int|null
+	 */
+	private static $resolved_uid = null;
+
+	/**
 	 * Is Google Site Kit installed and loaded?
 	 *
 	 * @return bool
@@ -29,33 +36,125 @@ class WPMCP_SiteKit {
 	}
 
 	/**
-	 * The admin user ID Site Kit requests should run as. Uses the configured
-	 * user, then the Site Kit owner, then the first administrator.
+	 * Resolve the admin user ID whose stored Google credentials Site Kit
+	 * requests should run as.
+	 *
+	 * Site Kit stores OAuth tokens per user and gates its data endpoints on
+	 * that user actually being authenticated. Picking "any administrator" (the
+	 * old behaviour) silently failed whenever the first admin was not the one
+	 * who connected Google. So we resolve in this order and verify connection:
+	 *
+	 *   1. The explicitly configured user (sitekit_user_id), if authenticated.
+	 *   2. The Site Kit owner (googlesitekit_owner_id), if authenticated.
+	 *   3. The first administrator that is actually Site Kit-authenticated.
+	 *   4. Fallback: the configured / owner / first admin even if unverified,
+	 *      so diagnostics still have someone to run as and report against.
 	 *
 	 * @return int
 	 */
 	public static function admin_user_id() {
-		$settings = WPMCP_Settings::all();
-		$uid      = (int) ( $settings['sitekit_user_id'] ?? 0 );
-		if ( $uid && get_userdata( $uid ) ) {
-			return $uid;
+		if ( null !== self::$resolved_uid ) {
+			return self::$resolved_uid;
 		}
+
+		$candidates = [];
+
+		$settings  = WPMCP_Settings::all();
+		$configured = (int) ( $settings['sitekit_user_id'] ?? 0 );
+		if ( $configured && get_userdata( $configured ) ) {
+			$candidates[] = $configured;
+		}
+
 		$owner = (int) get_option( 'googlesitekit_owner_id', 0 );
 		if ( $owner && get_userdata( $owner ) ) {
-			return $owner;
+			$candidates[] = $owner;
 		}
+
 		$admins = get_users(
 			[
 				'role'   => 'administrator',
-				'number' => 1,
+				'number' => 20,
 				'fields' => 'ID',
 			]
 		);
-		return $admins ? (int) $admins[0] : 0;
+		foreach ( $admins as $admin_id ) {
+			$candidates[] = (int) $admin_id;
+		}
+
+		$candidates = array_values( array_unique( array_filter( $candidates ) ) );
+
+		// Prefer a candidate that is genuinely connected to Google.
+		foreach ( $candidates as $uid ) {
+			if ( self::user_is_authenticated( $uid ) ) {
+				self::$resolved_uid = $uid;
+				return $uid;
+			}
+		}
+
+		// Nobody verified as connected — fall back to the best guess so the
+		// caller can still report a meaningful "not connected" diagnostic.
+		self::$resolved_uid = $candidates ? $candidates[0] : 0;
+		return self::$resolved_uid;
 	}
 
 	/**
-	 * High-level status for diagnostics.
+	 * Whether a specific user has a live Site Kit Google connection.
+	 *
+	 * Queries Site Kit's own authentication datapoint as that user. Returns
+	 * false on any error so an unconnected/unknown user never blocks resolution.
+	 *
+	 * @param int $uid User ID.
+	 * @return bool
+	 */
+	private static function user_is_authenticated( $uid ) {
+		if ( ! $uid || ! get_userdata( $uid ) ) {
+			return false;
+		}
+		$data = self::raw_request( $uid, '/google-site-kit/v1/core/user/data/authentication', [] );
+		if ( is_wp_error( $data ) ) {
+			return false;
+		}
+		return ! empty( $data['authenticated'] );
+	}
+
+	/**
+	 * Low-level internal Site Kit GET dispatched as a given user. Returns the
+	 * decoded data, or a WP_Error — never throws — so callers can branch.
+	 *
+	 * @param int    $uid   User ID to run as.
+	 * @param string $route Full REST route.
+	 * @param array  $params Query parameters.
+	 * @return array|WP_Error
+	 */
+	private static function raw_request( $uid, $route, $params ) {
+		if ( ! self::is_active() ) {
+			return new WP_Error( 'wpmcp_sitekit_inactive', 'Google Site Kit is not active on this site.' );
+		}
+		if ( ! $uid ) {
+			return new WP_Error( 'wpmcp_sitekit_no_user', 'No administrator available to authenticate the Site Kit request.' );
+		}
+
+		$previous = get_current_user_id();
+		wp_set_current_user( $uid );
+		try {
+			$request = new WP_REST_Request( 'GET', $route );
+			foreach ( $params as $key => $value ) {
+				$request->set_param( $key, $value );
+			}
+			$response = rest_do_request( $request );
+			if ( $response->is_error() ) {
+				return $response->as_error();
+			}
+			return $response->get_data();
+		} finally {
+			wp_set_current_user( $previous );
+		}
+	}
+
+	/**
+	 * High-level status for diagnostics. Actually verifies the connection so
+	 * the admin screen and the sitekit_status tool tell the truth instead of
+	 * always claiming "detected".
 	 *
 	 * @return array
 	 */
@@ -67,14 +166,41 @@ class WPMCP_SiteKit {
 				'note'      => 'Google Site Kit is not installed or not active on this site.',
 			];
 		}
-		$uid = self::admin_user_id();
+
+		$uid       = self::admin_user_id();
+		$auth      = $uid ? self::raw_request( $uid, '/google-site-kit/v1/core/user/data/authentication', [] ) : new WP_Error( 'no_user', 'No admin user.' );
+		$connected = ! is_wp_error( $auth ) && ! empty( $auth['authenticated'] );
+
+		$modules = [];
+		if ( $connected ) {
+			$mods = self::raw_request( $uid, '/google-site-kit/v1/core/modules/data/list', [] );
+			if ( ! is_wp_error( $mods ) && is_array( $mods ) ) {
+				foreach ( $mods as $mod ) {
+					if ( ! empty( $mod['slug'] ) && ! empty( $mod['connected'] ) ) {
+						$modules[] = $mod['slug'];
+					}
+				}
+			}
+		}
+
+		if ( $connected ) {
+			$note = $modules
+				? 'Site Kit connected. Active modules: ' . implode( ', ', $modules ) . '.'
+				: 'Site Kit connected, but no data modules (Search Console / Analytics / PageSpeed) are set up yet — connect them in Site Kit.';
+		} elseif ( ! $uid ) {
+			$note = 'No administrator found to run Site Kit requests as.';
+		} else {
+			$reason = is_wp_error( $auth ) ? $auth->get_error_message() : 'the connected admin is not authenticated with Google';
+			$note   = 'Site Kit is installed but not connected for the resolved user. Open Site Kit and complete the Google sign-in, then set the connecting admin in WordPress MCP if needed. (' . $reason . ')';
+		}
+
 		return [
 			'active'      => true,
+			'connected'   => $connected,
 			'version'     => defined( 'GOOGLESITEKIT_VERSION' ) ? GOOGLESITEKIT_VERSION : 'unknown',
 			'run_as_user' => $uid,
-			'note'        => $uid
-				? 'Site Kit detected. Data requests run as the connected administrator. If requests fail, confirm Site Kit is connected and the modules (Search Console / Analytics) are active.'
-				: 'No administrator found to run Site Kit requests as.',
+			'modules'     => $modules,
+			'note'        => $note,
 		];
 	}
 
@@ -93,28 +219,23 @@ class WPMCP_SiteKit {
 		}
 		$uid = self::admin_user_id();
 		if ( ! $uid ) {
-			throw new Exception( 'No administrator available to authenticate the Site Kit request.' );
+			throw new Exception( 'No administrator available to authenticate the Site Kit request. Connect Google Site Kit as an administrator first.' );
 		}
 
-		$previous = get_current_user_id();
-		wp_set_current_user( $uid );
+		$route  = sprintf( '/google-site-kit/v1/modules/%s/data/%s', $module, $datapoint );
+		$result = self::raw_request( $uid, $route, $params );
 
-		try {
-			$route   = sprintf( '/google-site-kit/v1/modules/%s/data/%s', $module, $datapoint );
-			$request = new WP_REST_Request( 'GET', $route );
-			foreach ( $params as $key => $value ) {
-				$request->set_param( $key, $value );
+		if ( is_wp_error( $result ) ) {
+			$data    = $result->get_error_data();
+			$status  = is_array( $data ) && isset( $data['status'] ) ? $data['status'] : 'n/a';
+			$message = $result->get_error_message();
+			// Make the most common cause actionable rather than cryptic.
+			if ( false !== stripos( $message, 'authenticate' ) || false !== stripos( $message, 'permission' ) || 401 === $status || 403 === $status ) {
+				$message .= ' — Site Kit reports the run-as admin (user ' . $uid . ') is not connected to Google or lacks access to this module. Check Integration status in WordPress MCP and reconnect Site Kit.';
 			}
-			$response = rest_do_request( $request );
-
-			if ( $response->is_error() ) {
-				$error = $response->as_error();
-				throw new Exception( 'Site Kit error: ' . $error->get_error_message() );
-			}
-			return $response->get_data();
-		} finally {
-			wp_set_current_user( $previous );
+			throw new Exception( sprintf( 'Site Kit error [%s] on %s/%s: %s', $status, $module, $datapoint, $message ) );
 		}
+		return $result;
 	}
 
 	/**

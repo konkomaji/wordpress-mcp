@@ -259,11 +259,21 @@ All Site Kit access is **read-only** (GET data endpoints only).
 2. Activate **WordPress MCP**.
 3. Open **WordPress MCP** in the admin menu; copy the endpoint, key, and the ready-made connect command:
 
+**Claude Code** (Bearer header):
+
 ```bash
 claude mcp add --transport http my-client-site \
   https://client.example.com/wp-json/wp-mcp/v1/mcp \
   --header "Authorization: Bearer YOUR_KEY_HERE"
 ```
+
+**Claude chat** (web/desktop custom connector). The chat connector UI takes a URL only — no header field — so the key travels in the query string. In Claude, go to **Settings → Connectors → Add custom connector** and paste the URL shown on the settings screen:
+
+```
+https://client.example.com/wp-json/wp-mcp/v1/mcp?key=YOUR_KEY_HERE
+```
+
+> Because the key is in the URL for chat connectors, serve the site over **HTTPS** (the key is then inside the encrypted request, not the hostname) and regenerate the key if a URL is ever shared. Header auth (Claude Code) keeps the key out of the URL entirely.
 
 4. Toggle the capability groups you need. Defaults are safe.
 

@@ -58,7 +58,13 @@ class WPMCP_REST {
 	}
 
 	/**
-	 * Bearer-token / header auth using a constant-time compare.
+	 * Bearer-token / header / query-key auth using a constant-time compare.
+	 *
+	 * Three ways to present the key, in order:
+	 *   1. Authorization: Bearer <key>   — Claude Code, curl, most MCP clients.
+	 *   2. X-WP-MCP-Key: <key>           — header alternative.
+	 *   3. ?key=<key> in the endpoint URL — required for Claude.ai chat custom
+	 *      connectors, which accept only a URL and give no way to set a header.
 	 *
 	 * @param WP_REST_Request $request Incoming request.
 	 * @return true|WP_Error
@@ -74,6 +80,12 @@ class WPMCP_REST {
 		}
 		$alt = (string) $request->get_header( 'x_wp_mcp_key' );
 		if ( $alt && hash_equals( $key, $alt ) ) {
+			return true;
+		}
+		// Key carried in the URL ( ?key= ). Lets Claude.ai chat connectors —
+		// which only take a URL, no custom header — authenticate.
+		$query = (string) $request->get_param( 'key' );
+		if ( $query && hash_equals( $key, $query ) ) {
 			return true;
 		}
 		return new WP_Error( 'wpmcp_unauthorized', 'Invalid or missing API key.', [ 'status' => 401 ] );

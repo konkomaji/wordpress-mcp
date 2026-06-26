@@ -157,6 +157,9 @@ class WPMCP_Admin {
 			$endpoint,
 			$key
 		);
+		// Claude.ai chat custom connectors accept only a URL (no header field),
+		// so the key travels in the query string.
+		$chat_url = add_query_arg( 'key', rawurlencode( $key ), $endpoint );
 		$seo      = WPMCP_SEO::status();
 		$sitekit  = WPMCP_SiteKit::status();
 		$state    = isset( $_GET['wpmcp_state'] ) ? sanitize_key( wp_unslash( $_GET['wpmcp_state'] ) ) : '';
@@ -191,6 +194,10 @@ class WPMCP_Admin {
 				<div class="wpmcp-field">
 					<span class="wpmcp-label"><?php esc_html_e( 'Add to Claude Code', 'wordpress-mcp' ); ?></span>
 					<code class="wpmcp-mono"><?php echo esc_html( $connect ); ?></code>
+				</div>
+				<div class="wpmcp-field">
+					<span class="wpmcp-label"><?php esc_html_e( 'Add to Claude chat (Settings → Connectors → Add custom connector → paste this URL)', 'wordpress-mcp' ); ?></span>
+					<code class="wpmcp-mono"><?php echo esc_html( $chat_url ); ?></code>
 				</div>
 				<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" onsubmit="return confirm('<?php echo esc_js( __( 'Regenerate the key? Any client using the current key will stop working until updated.', 'wordpress-mcp' ) ); ?>');">
 					<?php wp_nonce_field( 'wpmcp_save' ); ?>
@@ -256,8 +263,10 @@ class WPMCP_Admin {
 					</p>
 					<p>
 						<b><?php esc_html_e( 'Google Site Kit:', 'wordpress-mcp' ); ?></b>
-						<?php if ( ! empty( $sitekit['active'] ) ) : ?>
-							<span class="wpmcp-pill wpmcp-pill-on"><?php esc_html_e( 'active', 'wordpress-mcp' ); ?></span>
+						<?php if ( ! empty( $sitekit['connected'] ) ) : ?>
+							<span class="wpmcp-pill wpmcp-pill-on"><?php esc_html_e( 'connected', 'wordpress-mcp' ); ?></span>
+						<?php elseif ( ! empty( $sitekit['active'] ) ) : ?>
+							<span class="wpmcp-pill wpmcp-pill-risk"><?php esc_html_e( 'active — not connected', 'wordpress-mcp' ); ?></span>
 						<?php else : ?>
 							<span class="wpmcp-pill wpmcp-pill-off"><?php esc_html_e( 'not installed', 'wordpress-mcp' ); ?></span>
 						<?php endif; ?>
