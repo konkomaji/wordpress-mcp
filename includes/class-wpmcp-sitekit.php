@@ -259,6 +259,58 @@ class WPMCP_SiteKit {
 	}
 
 	/**
+	 * Mine Search Console for striking-distance keyword opportunities: queries
+	 * ranking in a target position band with enough impressions to be worth
+	 * optimising. Sorted by impressions (traffic potential) descending.
+	 *
+	 * @param array $args start_date, end_date, min_position, max_position, min_impressions, limit.
+	 * @return array
+	 */
+	public static function keyword_opportunities( $args = [] ) {
+		$min_pos = isset( $args['min_position'] ) ? (float) $args['min_position'] : 5.0;
+		$max_pos = isset( $args['max_position'] ) ? (float) $args['max_position'] : 20.0;
+		$min_imp = isset( $args['min_impressions'] ) ? (int) $args['min_impressions'] : 10;
+		$limit   = (int) ( $args['limit'] ?? 50 );
+
+		// Pull a wide set, then filter locally to the opportunity band.
+		$rows = self::search_analytics(
+			[
+				'dimension'  => 'query',
+				'start_date' => $args['start_date'] ?? null,
+				'end_date'   => $args['end_date'] ?? null,
+				'limit'      => 1000,
+			]
+		);
+
+		$out = [];
+		foreach ( (array) $rows as $row ) {
+			$position    = isset( $row['position'] ) ? (float) $row['position'] : 0;
+			$impressions = isset( $row['impressions'] ) ? (int) $row['impressions'] : 0;
+			if ( $position < $min_pos || $position > $max_pos || $impressions < $min_imp ) {
+				continue;
+			}
+			$keys  = isset( $row['keys'] ) && is_array( $row['keys'] ) ? $row['keys'] : [];
+			$out[] = [
+				'query'       => $keys ? (string) $keys[0] : '',
+				'clicks'      => isset( $row['clicks'] ) ? (int) $row['clicks'] : 0,
+				'impressions' => $impressions,
+				'ctr'         => isset( $row['ctr'] ) ? round( (float) $row['ctr'] * 100, 2 ) : 0,
+				'position'    => round( $position, 1 ),
+			];
+		}
+
+		usort( $out, function ( $a, $b ) {
+			return $b['impressions'] <=> $a['impressions'];
+		} );
+
+		return [
+			'band'          => sprintf( 'positions %s-%s, min %d impressions', $min_pos, $max_pos, $min_imp ),
+			'count'         => count( $out ),
+			'opportunities' => array_slice( $out, 0, $limit ),
+		];
+	}
+
+	/**
 	 * GA4 report passthrough. Caller supplies Site Kit's expected params.
 	 *
 	 * @param array $args metrics, dimensions, start_date, end_date, limit.

@@ -70,25 +70,80 @@ class WPMCP_REST {
 	 * @return true|WP_Error
 	 */
 	public function check_auth( $request ) {
+		// Brute-force throttle: a key sitting on a public endpoint across many
+		// client sites is a guessing target. Lock an IP out after repeated misses.
+		if ( $this->is_locked_out() ) {
+			return new WP_Error(
+				'wpmcp_locked',
+				'Too many failed authentication attempts. Try again later.',
+				[ 'status' => 429 ]
+			);
+		}
+
 		$key = WPMCP_Settings::api_key();
 		if ( ! $key ) {
 			return new WP_Error( 'wpmcp_no_key', 'No API key configured.', [ 'status' => 401 ] );
 		}
 		$auth = (string) $request->get_header( 'authorization' );
 		if ( $auth && hash_equals( 'Bearer ' . $key, $auth ) ) {
+			$this->clear_failures();
 			return true;
 		}
 		$alt = (string) $request->get_header( 'x_wp_mcp_key' );
 		if ( $alt && hash_equals( $key, $alt ) ) {
+			$this->clear_failures();
 			return true;
 		}
 		// Key carried in the URL ( ?key= ). Lets Claude.ai chat connectors —
 		// which only take a URL, no custom header — authenticate.
 		$query = (string) $request->get_param( 'key' );
 		if ( $query && hash_equals( $key, $query ) ) {
+			$this->clear_failures();
 			return true;
 		}
+		$this->record_failure();
 		return new WP_Error( 'wpmcp_unauthorized', 'Invalid or missing API key.', [ 'status' => 401 ] );
+	}
+
+	/**
+	 * Max failed attempts before a lockout, and the lockout window in seconds.
+	 */
+	const MAX_FAILURES   = 10;
+	const LOCKOUT_WINDOW = 900; // 15 minutes.
+
+	/**
+	 * Transient key for the current client IP's failure counter.
+	 *
+	 * @return string
+	 */
+	private function failure_key() {
+		$ip = isset( $_SERVER['REMOTE_ADDR'] ) ? (string) $_SERVER['REMOTE_ADDR'] : 'unknown'; // phpcs:ignore WordPress.Security.ValidatedSanitizedInput
+		return 'wpmcp_auth_fail_' . md5( $ip );
+	}
+
+	/**
+	 * Whether the current IP is currently locked out.
+	 *
+	 * @return bool
+	 */
+	private function is_locked_out() {
+		return (int) get_transient( $this->failure_key() ) >= self::MAX_FAILURES;
+	}
+
+	/**
+	 * Increment the failure counter for the current IP within the window.
+	 */
+	private function record_failure() {
+		$tk    = $this->failure_key();
+		$count = (int) get_transient( $tk ) + 1;
+		set_transient( $tk, $count, self::LOCKOUT_WINDOW );
+	}
+
+	/**
+	 * Reset the failure counter after a successful auth.
+	 */
+	private function clear_failures() {
+		delete_transient( $this->failure_key() );
 	}
 
 	/**

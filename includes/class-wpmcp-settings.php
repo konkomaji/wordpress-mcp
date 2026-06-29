@@ -51,7 +51,7 @@ class WPMCP_Settings {
 			],
 			'filesystem'  => [
 				'label'   => __( 'Filesystem', 'wordpress-mcp' ),
-				'desc'    => __( 'Read/write/delete files inside the WordPress install. Writing PHP changes the live site immediately. High risk.', 'wordpress-mcp' ),
+				'desc'    => __( 'Read, write, edit (in-place string replace / append / prepend), move, delete files and create folders inside the WordPress install. Writing PHP changes the live site immediately. High risk.', 'wordpress-mcp' ),
 				'default' => false,
 			],
 			'database'    => [

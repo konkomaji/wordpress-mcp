@@ -354,6 +354,75 @@ class WPMCP_Tools {
 					'required'   => [ 'attachment_id', 'alt_text' ],
 				],
 			],
+			[
+				'group'       => 'content',
+				'name'        => 'analyze_content',
+				'description' => 'Deep on-page SEO/AEO analysis of one post: focus-keyword placement (title, meta description, URL slug, first paragraph, headings), keyword density, word count, full heading outline (H1-H6), internal vs external link counts, images missing alt, meta title/description length checks, schema presence, and AEO question-coverage. Returns concrete issues + a score. Read-only.',
+				'inputSchema' => [
+					'type'       => 'object',
+					'properties' => [
+						'id'            => [ 'type' => 'integer' ],
+						'focus_keyword' => [ 'type' => 'string', 'description' => 'Override the keyword to test. Defaults to the post\'s SEO focus keyword.' ],
+					],
+					'required'   => [ 'id' ],
+				],
+			],
+			[
+				'group'       => 'content',
+				'name'        => 'generate_schema',
+				'description' => 'Auto-build JSON-LD structured data from a post and (optionally) apply it for AEO/rich results. type=Article|BlogPosting|FAQPage|HowTo|BreadcrumbList|Product. For FAQPage pass faqs=[{question,answer}]; for HowTo pass steps=[{name,text}]. apply=true writes it to the post (same store as set_schema).',
+				'inputSchema' => [
+					'type'       => 'object',
+					'properties' => [
+						'id'    => [ 'type' => 'integer' ],
+						'type'  => [ 'type' => 'string', 'description' => 'Schema type. Default Article.' ],
+						'faqs'  => [ 'type' => 'array', 'description' => 'For FAQPage: array of {question, answer}.' ],
+						'steps' => [ 'type' => 'array', 'description' => 'For HowTo: array of {name, text}.' ],
+						'apply' => [ 'type' => 'boolean', 'description' => 'Write the schema to the post. Default false (preview only).' ],
+					],
+					'required'   => [ 'id' ],
+				],
+			],
+			[
+				'group'       => 'content',
+				'name'        => 'internal_link_opportunities',
+				'description' => 'Find internal-linking opportunities: other published posts whose body mentions a keyword (or the target post\'s title) but do not yet link to the target post. Returns candidate posts with the matched phrase and a context snippet. Read-only — boosts topical authority for SEO.',
+				'inputSchema' => [
+					'type'       => 'object',
+					'properties' => [
+						'target_id' => [ 'type' => 'integer', 'description' => 'Post that should receive inbound links.' ],
+						'keyword'   => [ 'type' => 'string', 'description' => 'Phrase to search for. Defaults to the target post title.' ],
+						'limit'     => [ 'type' => 'integer', 'description' => 'Max candidate posts to scan. Default 200.' ],
+					],
+					'required'   => [ 'target_id' ],
+				],
+			],
+			[
+				'group'       => 'content',
+				'name'        => 'manage_robots_txt',
+				'description' => 'Get or set extra robots.txt directives appended to the site\'s virtual robots.txt — including AI/GEO crawler control (GPTBot, ClaudeBot, Google-Extended, PerplexityBot, CCBot, etc.). action=get returns current extra rules + the effective robots.txt; action=set stores new rules.',
+				'inputSchema' => [
+					'type'       => 'object',
+					'properties' => [
+						'action'  => [ 'type' => 'string', 'description' => 'get|set. Default get.' ],
+						'content' => [ 'type' => 'string', 'description' => 'Raw robots.txt directives for action=set.' ],
+					],
+				],
+			],
+			[
+				'group'       => 'content',
+				'name'        => 'manage_redirects',
+				'description' => 'Manage SEO 301/302 redirects served by the plugin. action=list returns all; action=add needs from + to (code optional, default 301); action=delete needs from. from is a site-relative path; to is a path or absolute URL.',
+				'inputSchema' => [
+					'type'       => 'object',
+					'properties' => [
+						'action' => [ 'type' => 'string', 'description' => 'list|add|delete. Default list.' ],
+						'from'   => [ 'type' => 'string', 'description' => 'Source path, e.g. /old-page.' ],
+						'to'     => [ 'type' => 'string', 'description' => 'Destination path or URL.' ],
+						'code'   => [ 'type' => 'integer', 'description' => '301|302|307|308. Default 301.' ],
+					],
+				],
+			],
 		];
 	}
 
@@ -475,6 +544,22 @@ class WPMCP_Tools {
 						'strategy' => [ 'type' => 'string', 'description' => 'mobile|desktop. Default mobile.' ],
 					],
 					'required'   => [ 'url' ],
+				],
+			],
+			[
+				'group'       => 'sitekit',
+				'name'        => 'sitekit_keyword_opportunities',
+				'description' => 'Mine Search Console for quick-win SEO keywords: queries ranking on positions 5-20 (page 1-2 striking distance) with meaningful impressions but low CTR — the highest-ROI optimisation targets. Returns query, clicks, impressions, CTR, position, sorted by opportunity.',
+				'inputSchema' => [
+					'type'       => 'object',
+					'properties' => [
+						'start_date'  => [ 'type' => 'string', 'description' => 'YYYY-MM-DD. Default 28 days ago.' ],
+						'end_date'    => [ 'type' => 'string', 'description' => 'YYYY-MM-DD. Default yesterday.' ],
+						'min_position'=> [ 'type' => 'number', 'description' => 'Lowest avg position to include. Default 5.' ],
+						'max_position'=> [ 'type' => 'number', 'description' => 'Highest avg position to include. Default 20.' ],
+						'min_impressions' => [ 'type' => 'integer', 'description' => 'Minimum impressions. Default 10.' ],
+						'limit'       => [ 'type' => 'integer', 'description' => 'Max rows to return. Default 50.' ],
+					],
 				],
 			],
 			[
@@ -664,6 +749,46 @@ class WPMCP_Tools {
 					'type'       => 'object',
 					'properties' => [ 'path' => [ 'type' => 'string' ] ],
 					'required'   => [ 'path' ],
+				],
+			],
+			[
+				'group'       => 'filesystem',
+				'name'        => 'edit_file',
+				'description' => 'Targeted in-place edit of a UTF-8 text file relative to the WordPress root — no need to resend the whole file. mode=replace (default) swaps an exact old_string for new_string; old_string must match exactly once unless replace_all=true. mode=append/prepend adds new_string to the end/start without needing a match.',
+				'inputSchema' => [
+					'type'       => 'object',
+					'properties' => [
+						'path'        => [ 'type' => 'string' ],
+						'old_string'  => [ 'type' => 'string', 'description' => 'Exact text to find. Required for mode=replace; ignored for append/prepend.' ],
+						'new_string'  => [ 'type' => 'string', 'description' => 'Replacement text, or text to add for append/prepend.' ],
+						'replace_all' => [ 'type' => 'boolean', 'description' => 'Replace every occurrence. Default false (old_string must be unique).' ],
+						'mode'        => [ 'type' => 'string', 'description' => 'replace|append|prepend. Default replace.' ],
+					],
+					'required'   => [ 'path' ],
+				],
+			],
+			[
+				'group'       => 'filesystem',
+				'name'        => 'make_dir',
+				'description' => 'Create a directory (recursively) relative to the WordPress root.',
+				'inputSchema' => [
+					'type'       => 'object',
+					'properties' => [ 'path' => [ 'type' => 'string' ] ],
+					'required'   => [ 'path' ],
+				],
+			],
+			[
+				'group'       => 'filesystem',
+				'name'        => 'move_file',
+				'description' => 'Move or rename a file/directory within the WordPress install. Both paths are relative to the WP root; missing destination folders are created.',
+				'inputSchema' => [
+					'type'       => 'object',
+					'properties' => [
+						'path'        => [ 'type' => 'string', 'description' => 'Source path.' ],
+						'destination' => [ 'type' => 'string', 'description' => 'Target path.' ],
+						'overwrite'   => [ 'type' => 'boolean', 'description' => 'Overwrite an existing destination. Default false.' ],
+					],
+					'required'   => [ 'path', 'destination' ],
 				],
 			],
 		];
@@ -1264,6 +1389,449 @@ class WPMCP_Tools {
 	}
 
 	/**
+	 * Deep on-page SEO/AEO analysis for one post.
+	 *
+	 * @param array $args Args.
+	 * @return array
+	 */
+	private function tool_analyze_content( $args ) {
+		$id = (int) $args['id'];
+		$p  = get_post( $id );
+		if ( ! $p ) {
+			throw new Exception( 'Content not found' );
+		}
+		$seo     = WPMCP_SEO::get_post_seo( $id );
+		$keyword = trim( (string) ( $args['focus_keyword'] ?? $seo['focus_keyword'] ) );
+		$html    = (string) $p->post_content;
+		$text    = wp_strip_all_tags( $html );
+		$words   = str_word_count( $text );
+		$lower   = function_exists( 'mb_strtolower' ) ? mb_strtolower( $text ) : strtolower( $text );
+		$kw      = function_exists( 'mb_strtolower' ) ? mb_strtolower( $keyword ) : strtolower( $keyword );
+
+		// Heading outline.
+		$headings = [];
+		$counts   = [ 'h1' => 0, 'h2' => 0, 'h3' => 0, 'h4' => 0, 'h5' => 0, 'h6' => 0 ];
+		if ( preg_match_all( '/<h([1-6])\b[^>]*>(.*?)<\/h\1>/is', $html, $m, PREG_SET_ORDER ) ) {
+			foreach ( $m as $h ) {
+				$level                  = 'h' . $h[1];
+				$counts[ $level ]      += 1;
+				$htext                  = trim( wp_strip_all_tags( $h[2] ) );
+				$headings[]             = [ 'level' => (int) $h[1], 'text' => $htext ];
+			}
+		}
+
+		// Links.
+		$internal = 0;
+		$external = 0;
+		$host     = wp_parse_url( home_url(), PHP_URL_HOST );
+		if ( preg_match_all( '/<a\b[^>]*href=["\']([^"\']+)["\']/i', $html, $lm ) ) {
+			foreach ( $lm[1] as $href ) {
+				if ( 0 === strpos( $href, '#' ) ) {
+					continue;
+				}
+				$lhost = wp_parse_url( $href, PHP_URL_HOST );
+				if ( ! $lhost || $lhost === $host ) {
+					$internal++;
+				} else {
+					$external++;
+				}
+			}
+		}
+
+		// Images / alt coverage.
+		$img_total   = 0;
+		$img_no_alt  = 0;
+		if ( preg_match_all( '/<img\b[^>]*>/i', $html, $im ) ) {
+			foreach ( $im[0] as $img ) {
+				$img_total++;
+				if ( ! preg_match( '/\balt=["\'][^"\']+["\']/i', $img ) ) {
+					$img_no_alt++;
+				}
+			}
+		}
+
+		// Keyword placement + density.
+		$kw_count   = ( '' !== $kw ) ? substr_count( $lower, $kw ) : 0;
+		$density    = $words > 0 ? round( ( $kw_count / max( 1, $words ) ) * 100, 2 ) : 0;
+		$first_para = '';
+		if ( preg_match( '/<p\b[^>]*>(.*?)<\/p>/is', $html, $fp ) ) {
+			$first_para = wp_strip_all_tags( $fp[1] );
+		} else {
+			$first_para = substr( $text, 0, 200 );
+		}
+		$first_lower = function_exists( 'mb_strtolower' ) ? mb_strtolower( $first_para ) : strtolower( $first_para );
+		$slug        = $p->post_name;
+
+		$kw_in = [
+			'title'           => '' !== $kw && false !== strpos( function_exists( 'mb_strtolower' ) ? mb_strtolower( $p->post_title ) : strtolower( $p->post_title ), $kw ),
+			'seo_title'       => '' !== $kw && false !== strpos( strtolower( $seo['title'] ), $kw ),
+			'meta_description'=> '' !== $kw && false !== strpos( strtolower( $seo['description'] ), $kw ),
+			'url_slug'        => '' !== $kw && false !== strpos( str_replace( '-', ' ', $slug ), str_replace( '-', ' ', $kw ) ),
+			'first_paragraph' => '' !== $kw && false !== strpos( $first_lower, $kw ),
+			'any_heading'     => false,
+		];
+		foreach ( $headings as $h ) {
+			$ht = function_exists( 'mb_strtolower' ) ? mb_strtolower( $h['text'] ) : strtolower( $h['text'] );
+			if ( '' !== $kw && false !== strpos( $ht, $kw ) ) {
+				$kw_in['any_heading'] = true;
+				break;
+			}
+		}
+
+		// AEO: question-style headings + FAQ schema presence.
+		$question_headings = 0;
+		foreach ( $headings as $h ) {
+			if ( preg_match( '/\?\s*$/', $h['text'] ) || preg_match( '/^(how|what|why|when|where|who|which|can|do|does|is|are)\b/i', $h['text'] ) ) {
+				$question_headings++;
+			}
+		}
+		$schema_raw = get_post_meta( $id, WPMCP_Frontend::JSONLD_META, true );
+		$has_faq    = $schema_raw && false !== stripos( $schema_raw, 'FAQPage' );
+
+		// Issues + score.
+		$issues = [];
+		if ( $words < 300 ) {
+			$issues[] = 'Thin content: under 300 words.';
+		}
+		if ( '' === $keyword ) {
+			$issues[] = 'No focus keyword set.';
+		} else {
+			if ( ! $kw_in['seo_title'] ) {
+				$issues[] = 'Focus keyword missing from SEO title.';
+			}
+			if ( ! $kw_in['meta_description'] ) {
+				$issues[] = 'Focus keyword missing from meta description.';
+			}
+			if ( ! $kw_in['first_paragraph'] ) {
+				$issues[] = 'Focus keyword missing from the first paragraph.';
+			}
+			if ( ! $kw_in['any_heading'] ) {
+				$issues[] = 'Focus keyword missing from all headings.';
+			}
+			if ( ! $kw_in['url_slug'] ) {
+				$issues[] = 'Focus keyword missing from the URL slug.';
+			}
+			if ( $density > 3 ) {
+				$issues[] = sprintf( 'Keyword density high (%.2f%%) — risk of over-optimisation.', $density );
+			} elseif ( $kw_count === 0 ) {
+				$issues[] = 'Focus keyword never appears in the body.';
+			}
+		}
+		if ( '' === $seo['description'] ) {
+			$issues[] = 'Missing meta description.';
+		} elseif ( strlen( $seo['description'] ) > 160 ) {
+			$issues[] = sprintf( 'Meta description long (%d chars) — may truncate in SERP.', strlen( $seo['description'] ) );
+		} elseif ( strlen( $seo['description'] ) < 70 ) {
+			$issues[] = sprintf( 'Meta description short (%d chars).', strlen( $seo['description'] ) );
+		}
+		$eff_title = '' !== $seo['title'] ? $seo['title'] : $p->post_title;
+		if ( strlen( $eff_title ) > 60 ) {
+			$issues[] = sprintf( 'SEO title long (%d chars) — may truncate.', strlen( $eff_title ) );
+		}
+		if ( 0 === $counts['h1'] && 0 === $counts['h2'] ) {
+			$issues[] = 'No H1/H2 headings — weak content structure.';
+		}
+		if ( $img_no_alt > 0 ) {
+			$issues[] = sprintf( '%d image(s) missing alt text.', $img_no_alt );
+		}
+		if ( 0 === $internal ) {
+			$issues[] = 'No internal links — add some for topical authority.';
+		}
+		if ( ! empty( $seo['noindex'] ) ) {
+			$issues[] = 'Page is set to noindex — it will not rank.';
+		}
+
+		$score = max( 0, 100 - ( count( $issues ) * 8 ) );
+
+		return [
+			'id'                => $id,
+			'title'             => $p->post_title,
+			'focus_keyword'     => $keyword,
+			'word_count'        => $words,
+			'keyword_count'     => $kw_count,
+			'keyword_density'   => $density,
+			'keyword_placement' => $kw_in,
+			'heading_counts'    => $counts,
+			'heading_outline'   => $headings,
+			'links'             => [ 'internal' => $internal, 'external' => $external ],
+			'images'            => [ 'total' => $img_total, 'missing_alt' => $img_no_alt ],
+			'meta_title_length' => strlen( $eff_title ),
+			'meta_desc_length'  => strlen( $seo['description'] ),
+			'aeo'               => [
+				'question_headings' => $question_headings,
+				'has_faq_schema'    => $has_faq,
+				'has_any_schema'    => ! empty( $schema_raw ),
+			],
+			'noindex'           => ! empty( $seo['noindex'] ),
+			'issues'            => $issues,
+			'score'             => $score,
+		];
+	}
+
+	/**
+	 * Build (and optionally apply) JSON-LD for a post.
+	 *
+	 * @param array $args Args.
+	 * @return array
+	 */
+	private function tool_generate_schema( $args ) {
+		$id = (int) $args['id'];
+		$p  = get_post( $id );
+		if ( ! $p ) {
+			throw new Exception( 'Content not found' );
+		}
+		$type    = $args['type'] ?? 'Article';
+		$url     = get_permalink( $id );
+		$seo     = WPMCP_SEO::get_post_seo( $id );
+		$title   = '' !== $seo['title'] ? $seo['title'] : $p->post_title;
+		$desc    = '' !== $seo['description'] ? $seo['description'] : wp_trim_words( wp_strip_all_tags( $p->post_content ), 30, '' );
+		$thumb   = get_post_thumbnail_id( $id );
+		$image   = $thumb ? wp_get_attachment_url( $thumb ) : '';
+
+		switch ( $type ) {
+			case 'FAQPage':
+				$faqs   = (array) ( $args['faqs'] ?? [] );
+				$items  = [];
+				foreach ( $faqs as $f ) {
+					if ( empty( $f['question'] ) || empty( $f['answer'] ) ) {
+						continue;
+					}
+					$items[] = [
+						'@type'          => 'Question',
+						'name'           => (string) $f['question'],
+						'acceptedAnswer' => [ '@type' => 'Answer', 'text' => (string) $f['answer'] ],
+					];
+				}
+				if ( ! $items ) {
+					throw new Exception( 'FAQPage needs a non-empty faqs array of {question, answer}.' );
+				}
+				$schema = [ '@context' => 'https://schema.org', '@type' => 'FAQPage', 'mainEntity' => $items ];
+				break;
+
+			case 'HowTo':
+				$steps  = (array) ( $args['steps'] ?? [] );
+				$items  = [];
+				foreach ( $steps as $i => $s ) {
+					if ( empty( $s['text'] ) ) {
+						continue;
+					}
+					$items[] = [
+						'@type' => 'HowToStep',
+						'name'  => (string) ( $s['name'] ?? ( 'Step ' . ( $i + 1 ) ) ),
+						'text'  => (string) $s['text'],
+					];
+				}
+				if ( ! $items ) {
+					throw new Exception( 'HowTo needs a non-empty steps array of {name, text}.' );
+				}
+				$schema = [ '@context' => 'https://schema.org', '@type' => 'HowTo', 'name' => $title, 'step' => $items ];
+				break;
+
+			case 'BreadcrumbList':
+				$crumbs = [];
+				$ancestors = array_reverse( get_post_ancestors( $id ) );
+				$pos       = 1;
+				$crumbs[]  = [ '@type' => 'ListItem', 'position' => $pos++, 'name' => get_bloginfo( 'name' ), 'item' => home_url() ];
+				foreach ( $ancestors as $anc ) {
+					$crumbs[] = [ '@type' => 'ListItem', 'position' => $pos++, 'name' => get_the_title( $anc ), 'item' => get_permalink( $anc ) ];
+				}
+				$crumbs[] = [ '@type' => 'ListItem', 'position' => $pos, 'name' => $p->post_title, 'item' => $url ];
+				$schema   = [ '@context' => 'https://schema.org', '@type' => 'BreadcrumbList', 'itemListElement' => $crumbs ];
+				break;
+
+			case 'Product':
+				$schema = [
+					'@context'    => 'https://schema.org',
+					'@type'       => 'Product',
+					'name'        => $p->post_title,
+					'description' => $desc,
+					'url'         => $url,
+				];
+				if ( $image ) {
+					$schema['image'] = $image;
+				}
+				if ( function_exists( 'wc_get_product' ) ) {
+					$product = wc_get_product( $id );
+					if ( $product ) {
+						$schema['offers'] = [
+							'@type'         => 'Offer',
+							'price'         => $product->get_price(),
+							'priceCurrency' => get_option( 'woocommerce_currency', 'USD' ),
+							'availability'  => 'instock' === $product->get_stock_status() ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock',
+							'url'           => $url,
+						];
+					}
+				}
+				break;
+
+			case 'Article':
+			case 'BlogPosting':
+			default:
+				$author = get_the_author_meta( 'display_name', $p->post_author );
+				$schema = [
+					'@context'      => 'https://schema.org',
+					'@type'         => 'BlogPosting' === $type ? 'BlogPosting' : 'Article',
+					'headline'      => $title,
+					'description'   => $desc,
+					'datePublished' => get_the_date( 'c', $id ),
+					'dateModified'  => get_the_modified_date( 'c', $id ),
+					'author'        => [ '@type' => 'Person', 'name' => $author ],
+					'publisher'     => [ '@type' => 'Organization', 'name' => get_bloginfo( 'name' ) ],
+					'mainEntityOfPage' => $url,
+				];
+				if ( $image ) {
+					$schema['image'] = $image;
+				}
+				break;
+		}
+
+		$applied = false;
+		if ( ! empty( $args['apply'] ) ) {
+			$json = wp_json_encode( $schema );
+			if ( false === $json ) {
+				throw new Exception( 'Generated schema could not be encoded to JSON.' );
+			}
+			update_post_meta( $id, WPMCP_Frontend::JSONLD_META, wp_slash( $json ) );
+			$applied = true;
+		}
+
+		return [ 'id' => $id, 'type' => $type, 'applied' => $applied, 'schema' => $schema ];
+	}
+
+	/**
+	 * Find posts that mention a keyword but do not link to the target.
+	 *
+	 * @param array $args Args.
+	 * @return array
+	 */
+	private function tool_internal_link_opportunities( $args ) {
+		$target = (int) $args['target_id'];
+		$tp     = get_post( $target );
+		if ( ! $tp ) {
+			throw new Exception( 'Target post not found' );
+		}
+		$keyword = trim( (string) ( $args['keyword'] ?? $tp->post_title ) );
+		if ( '' === $keyword ) {
+			throw new Exception( 'No keyword to search for' );
+		}
+		$limit      = min( (int) ( $args['limit'] ?? 200 ) ?: 200, 1000 );
+		$target_url = get_permalink( $target );
+		$kw_lower   = function_exists( 'mb_strtolower' ) ? mb_strtolower( $keyword ) : strtolower( $keyword );
+
+		$q = new WP_Query(
+			[
+				'post_type'      => 'any',
+				'post_status'    => 'publish',
+				'posts_per_page' => $limit,
+				's'              => $keyword,
+				'post__not_in'   => [ $target ],
+			]
+		);
+
+		$out = [];
+		foreach ( $q->posts as $p ) {
+			$text  = wp_strip_all_tags( $p->post_content );
+			$lower = function_exists( 'mb_strtolower' ) ? mb_strtolower( $text ) : strtolower( $text );
+			$pos   = strpos( $lower, $kw_lower );
+			if ( false === $pos ) {
+				continue;
+			}
+			// Skip if it already links to the target.
+			if ( false !== strpos( $p->post_content, $target_url ) || false !== strpos( $p->post_content, '"' . $target . '"' ) ) {
+				continue;
+			}
+			$start   = max( 0, $pos - 60 );
+			$snippet = substr( $text, $start, 160 );
+			$out[]   = [
+				'id'        => $p->ID,
+				'title'     => $p->post_title,
+				'permalink' => get_permalink( $p->ID ),
+				'match'     => $keyword,
+				'snippet'   => '…' . trim( $snippet ) . '…',
+			];
+		}
+
+		return [
+			'target_id'     => $target,
+			'target_url'    => $target_url,
+			'keyword'       => $keyword,
+			'opportunities' => $out,
+			'count'         => count( $out ),
+		];
+	}
+
+	/**
+	 * Get/set extra robots.txt directives.
+	 *
+	 * @param array $args Args.
+	 * @return array
+	 */
+	private function tool_manage_robots_txt( $args ) {
+		$action = $args['action'] ?? 'get';
+		if ( 'set' === $action ) {
+			update_option( WPMCP_Frontend::ROBOTS_OPTION, (string) ( $args['content'] ?? '' ) );
+			return [ 'success' => true, 'url' => home_url( '/robots.txt' ) ];
+		}
+		$extra     = (string) get_option( WPMCP_Frontend::ROBOTS_OPTION, '' );
+		$effective = '';
+		$resp      = wp_remote_get( home_url( '/robots.txt' ), [ 'timeout' => 10 ] );
+		if ( ! is_wp_error( $resp ) ) {
+			$effective = wp_remote_retrieve_body( $resp );
+		}
+		return [
+			'url'                 => home_url( '/robots.txt' ),
+			'extra_rules'         => $extra,
+			'effective_robots_txt'=> $effective,
+		];
+	}
+
+	/**
+	 * List/add/delete managed redirects.
+	 *
+	 * @param array $args Args.
+	 * @return array
+	 */
+	private function tool_manage_redirects( $args ) {
+		$action = $args['action'] ?? 'list';
+		$map    = get_option( WPMCP_Frontend::REDIRECT_OPTION, [] );
+		if ( ! is_array( $map ) ) {
+			$map = [];
+		}
+
+		if ( 'add' === $action ) {
+			if ( empty( $args['from'] ) || empty( $args['to'] ) ) {
+				throw new Exception( 'add requires both from and to' );
+			}
+			$from = '/' . ltrim( (string) $args['from'], '/' );
+			$code = (int) ( $args['code'] ?? 301 );
+			if ( ! in_array( $code, [ 301, 302, 307, 308 ], true ) ) {
+				$code = 301;
+			}
+			// Replace any existing rule for the same source.
+			$map = array_values( array_filter( $map, function ( $e ) use ( $from ) {
+				return untrailingslashit( $e['from'] ) !== untrailingslashit( $from );
+			} ) );
+			$map[] = [ 'from' => $from, 'to' => (string) $args['to'], 'code' => $code ];
+			update_option( WPMCP_Frontend::REDIRECT_OPTION, $map );
+			return [ 'success' => true, 'redirects' => $map ];
+		}
+
+		if ( 'delete' === $action ) {
+			if ( empty( $args['from'] ) ) {
+				throw new Exception( 'delete requires from' );
+			}
+			$from = '/' . ltrim( (string) $args['from'], '/' );
+			$map  = array_values( array_filter( $map, function ( $e ) use ( $from ) {
+				return untrailingslashit( $e['from'] ) !== untrailingslashit( $from );
+			} ) );
+			update_option( WPMCP_Frontend::REDIRECT_OPTION, $map );
+			return [ 'success' => true, 'redirects' => $map ];
+		}
+
+		return [ 'redirects' => $map, 'count' => count( $map ) ];
+	}
+
+	/**
 	 * Apply taxonomy terms to a post.
 	 *
 	 * @param int   $post_id Post ID.
@@ -1473,6 +2041,14 @@ class WPMCP_Tools {
 	 */
 	private function tool_sitekit_get( $args ) {
 		return WPMCP_SiteKit::request( $args['module'], $args['datapoint'], (array) ( $args['params'] ?? [] ) );
+	}
+
+	/**
+	 * @param array $args Args.
+	 * @return array
+	 */
+	private function tool_sitekit_keyword_opportunities( $args ) {
+		return WPMCP_SiteKit::keyword_opportunities( $args );
 	}
 
 	/* =====================================================================
@@ -1717,14 +2293,25 @@ class WPMCP_Tools {
 			}
 			return $real;
 		}
-		// New file: validate its parent directory instead.
-		$dir = realpath( dirname( $full ) );
-		if ( false === $dir ) {
-			throw new Exception( 'Target directory does not exist' );
-		}
-		$dir = str_replace( '\\', '/', $dir );
-		if ( ! self::is_within( $dir, $base ) ) {
-			throw new Exception( 'Path escapes the WordPress install' );
+		// New path: climb to the nearest existing ancestor and confirm it sits
+		// inside the install. This allows targeting files/dirs that do not exist
+		// yet (created by write_file / make_dir / move_file) while traversal is
+		// already blocked by the '..' segment check above.
+		$ancestor = dirname( $full );
+		while ( true ) {
+			$real = realpath( $ancestor );
+			if ( false !== $real ) {
+				$real = str_replace( '\\', '/', $real );
+				if ( ! self::is_within( $real, $base ) ) {
+					throw new Exception( 'Path escapes the WordPress install' );
+				}
+				break;
+			}
+			$parent = dirname( $ancestor );
+			if ( $parent === $ancestor ) {
+				throw new Exception( 'Could not resolve a containing directory' );
+			}
+			$ancestor = $parent;
 		}
 		return $full;
 	}
@@ -1787,13 +2374,120 @@ class WPMCP_Tools {
 	 * @return array
 	 */
 	private function tool_write_file( $args ) {
-		$path  = $this->safe_path( $args['path'] );
+		$path = $this->safe_path( $args['path'] );
+		$dir  = dirname( $path );
+		if ( ! is_dir( $dir ) && ! wp_mkdir_p( $dir ) ) {
+			throw new Exception( 'Could not create parent directory — check permissions' );
+		}
 		$data  = ! empty( $args['base64'] ) ? base64_decode( $args['content'] ) : $args['content'];
 		$bytes = file_put_contents( $path, $data );
 		if ( false === $bytes ) {
 			throw new Exception( 'Write failed — check file permissions' );
 		}
 		return [ 'success' => true, 'bytes_written' => $bytes ];
+	}
+
+	/**
+	 * Targeted in-place edit: string replace, or append/prepend.
+	 *
+	 * @param array $args Args.
+	 * @return array
+	 */
+	private function tool_edit_file( $args ) {
+		$path = $this->safe_path( $args['path'] );
+		if ( ! is_file( $path ) ) {
+			throw new Exception( 'File not found' );
+		}
+		$content = file_get_contents( $path );
+		if ( false === $content ) {
+			throw new Exception( 'Could not read file' );
+		}
+		if ( ! mb_check_encoding( $content, 'UTF-8' ) ) {
+			throw new Exception( 'edit_file only supports UTF-8 text files. Use write_file for binary content.' );
+		}
+		$mode = $args['mode'] ?? 'replace';
+		$new  = (string) ( $args['new_string'] ?? '' );
+
+		if ( 'append' === $mode ) {
+			$updated = $content . $new;
+			$count   = 1;
+		} elseif ( 'prepend' === $mode ) {
+			$updated = $new . $content;
+			$count   = 1;
+		} else {
+			$old = (string) ( $args['old_string'] ?? '' );
+			if ( '' === $old ) {
+				throw new Exception( 'old_string is required for mode=replace' );
+			}
+			$occurrences = substr_count( $content, $old );
+			if ( 0 === $occurrences ) {
+				throw new Exception( 'old_string not found in file' );
+			}
+			if ( ! empty( $args['replace_all'] ) ) {
+				$updated = str_replace( $old, $new, $content, $count );
+			} elseif ( $occurrences > 1 ) {
+				throw new Exception( sprintf( 'old_string is not unique (%d matches). Add surrounding context or set replace_all=true.', $occurrences ) );
+			} else {
+				$pos     = strpos( $content, $old );
+				$updated = substr_replace( $content, $new, $pos, strlen( $old ) );
+				$count   = 1;
+			}
+		}
+
+		$bytes = file_put_contents( $path, $updated );
+		if ( false === $bytes ) {
+			throw new Exception( 'Write failed — check file permissions' );
+		}
+		return [
+			'success'       => true,
+			'replacements'  => $count,
+			'bytes_written' => $bytes,
+		];
+	}
+
+	/**
+	 * Create a directory (recursively).
+	 *
+	 * @param array $args Args.
+	 * @return array
+	 */
+	private function tool_make_dir( $args ) {
+		$path = $this->safe_path( $args['path'] );
+		if ( is_dir( $path ) ) {
+			return [ 'success' => true, 'note' => 'Directory already exists' ];
+		}
+		if ( is_file( $path ) ) {
+			throw new Exception( 'A file already exists at that path' );
+		}
+		if ( ! wp_mkdir_p( $path ) ) {
+			throw new Exception( 'Could not create directory — check permissions' );
+		}
+		return [ 'success' => true ];
+	}
+
+	/**
+	 * Move or rename a file/directory within the install.
+	 *
+	 * @param array $args Args.
+	 * @return array
+	 */
+	private function tool_move_file( $args ) {
+		$src = $this->safe_path( $args['path'] );
+		if ( ! file_exists( $src ) ) {
+			throw new Exception( 'Source not found' );
+		}
+		$dest = $this->safe_path( $args['destination'] );
+		if ( file_exists( $dest ) && empty( $args['overwrite'] ) ) {
+			throw new Exception( 'Destination already exists — set overwrite=true to replace it' );
+		}
+		$dir = dirname( $dest );
+		if ( ! is_dir( $dir ) && ! wp_mkdir_p( $dir ) ) {
+			throw new Exception( 'Could not create destination directory' );
+		}
+		if ( ! @rename( $src, $dest ) ) {
+			throw new Exception( 'Move failed — check permissions' );
+		}
+		return [ 'success' => true, 'path' => $args['destination'] ];
 	}
 
 	/**

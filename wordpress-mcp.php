@@ -3,7 +3,7 @@
  * Plugin Name:       WordPress MCP
  * Plugin URI:        https://github.com/konkomaji/wordpress-mcp
  * Description:        Universal Model Context Protocol (MCP) server for WordPress. Connects any client site to Claude (chat & Claude Code) for hands-on SEO / AEO / GEO work — engine-agnostic Yoast or RankMath, WooCommerce product SEO, Google Site Kit search & analytics data, JSON-LD schema, llms.txt, and full content publishing. Built for digital marketers and SEO agencies.
- * Version:           1.1.0
+ * Version:           1.2.0
  * Requires at least: 5.6
  * Requires PHP:      7.4
  * Author:            Konko Maji
@@ -21,7 +21,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-define( 'WPMCP_VERSION', '1.1.0' );
+define( 'WPMCP_VERSION', '1.2.0' );
 define( 'WPMCP_NAMESPACE', 'wp-mcp/v1' );
 define( 'WPMCP_OPTION', 'wpmcp_settings' );
 define( 'WPMCP_FILE', __FILE__ );

@@ -1,38 +1,94 @@
+<div align="center">
+
+<img src="assets/banner.svg" alt="WordPress MCP — built exclusively for Claude" width="100%" />
+
+<br/>
+
 # WordPress MCP
 
-**A universal Model Context Protocol (MCP) server for WordPress.** Drop it on any client's site and [Claude](https://claude.ai) — chat *and* Claude Code — can read the site's real state and implement changes directly: engine-agnostic **SEO** (Yoast / Rank Math), **AEO/GEO** (JSON-LD schema + `llms.txt`), **WooCommerce** product optimisation, and live **Google Search Console / GA4 / PageSpeed** data through an existing Site Kit install.
+**Turn any WordPress site into a remote server that [Claude](https://claude.ai) can read and work on directly.**
+Engine-agnostic **SEO** (Yoast / Rank Math) · **AEO/GEO** (JSON-LD, FAQ/HowTo schema, `llms.txt`, robots & redirects) · **WooCommerce** product optimisation · live **Google Search Console / GA4 / PageSpeed** — over one authenticated endpoint.
 
-Built for SEO agencies and digital marketers who run many client sites and want one plugin to wire each into an AI workflow — **powerful by default, safe by configuration.**
+<br/>
 
-> Built by [Konko Maji](https://www.linkedin.com/in/konkomaji/) · GPL-2.0-or-later · open source.
+[![Built for Claude](https://img.shields.io/badge/built%20exclusively%20for-Claude-d97757?style=for-the-badge&labelColor=1b1814)](https://claude.ai)
+[![Version](https://img.shields.io/badge/version-1.2.0-21759b?style=for-the-badge&labelColor=1b1814)](https://github.com/konkomaji/wordpress-mcp/releases)
+[![License](https://img.shields.io/badge/license-GPL--2.0-3aa3c9?style=for-the-badge&labelColor=1b1814)](LICENSE)
+
+![WordPress](https://img.shields.io/badge/WordPress-5.6%2B-21759b?logo=wordpress&logoColor=white)
+![PHP](https://img.shields.io/badge/PHP-7.4%2B-777bb4?logo=php&logoColor=white)
+![MCP](https://img.shields.io/badge/protocol-MCP%20%2F%20JSON--RPC%202.0-555)
+![Tools](https://img.shields.io/badge/tools-55-d97757)
+![Agency safe](https://img.shields.io/badge/dangerous%20groups-OFF%20by%20default-2ea44f)
+
+</div>
+
+---
+
+> ### 🔶 Built exclusively for Claude
+> This plugin is the bridge between WordPress and **Claude** — both **Claude Code** (Bearer-header MCP) and **Claude chat / Claude Desktop** (URL custom connector). Install it on a client site, add it to Claude once, and the agent can *see* the real site state and *implement* changes itself. No copy-paste, no second OAuth, no guessing which SEO plugin the client runs.
 
 ---
 
 ## Table of contents
 
-- [The idea](#the-idea)
+- [Who it's for](#who-its-for)
+- [Why it exists](#why-it-exists)
+- [What's new in 1.2.0](#whats-new-in-120)
 - [Architecture](#architecture)
 - [Request lifecycle (the wire)](#request-lifecycle-the-wire)
 - [Capability model](#capability-model)
-- [Tool catalogue (~46)](#tool-catalogue-46)
+- [Tool catalogue (55)](#tool-catalogue-55)
 - [Engine-agnostic SEO layer](#engine-agnostic-seo-layer)
 - [AEO / GEO layer](#aeo--geo-layer)
 - [Google Site Kit bridge](#google-site-kit-bridge)
 - [Security model](#security-model)
 - [Workflow — how an agency uses it](#workflow--how-an-agency-uses-it)
-- [Install & connect](#install--connect)
+- [Install & connect to Claude](#install--connect-to-claude)
 - [Extending](#extending)
 - [License](#license)
 
 ---
 
-## The idea
+## Who it's for
 
-You manage SEO for many clients on WordPress. The friction is that an AI assistant can't *see* a client's site — what's published, which schema exists, what Search Console actually reports — and can't *act* on it without you copy-pasting between tools.
+| You are… | You get… |
+|----------|----------|
+| **SEO agency / freelancer** running many WordPress clients | One plugin per client → each site wired into Claude. Audit, plan, and ship SEO/AEO/GEO at agency scale. |
+| **Digital marketer** who lives in Claude | Ask Claude in plain English; it reads Search Console, finds quick wins, writes the meta, publishes the post. |
+| **Developer / power user** | A clean JSON-RPC MCP surface with 55 typed tools, filesystem + raw-SQL access (gated), and a 3-step way to add your own tool. |
+| **WooCommerce store owner** | Product copy, pricing, stock, categories, and product schema — optimised by the agent. |
 
-WordPress MCP closes that loop. It turns each client site into a **remote MCP server**. You add it to Claude once per client with a single command; from then on the agent can list content, audit SEO, write meta fields to whichever SEO plugin the client runs, publish optimised posts and products, manage `llms.txt`, and pull live Google data — all over one authenticated endpoint.
+**Powerful by default for content/SEO. Safe by configuration for everything dangerous.**
 
-The design principle: **the core SEO/content work is always available and safe to hand to an agent; the dangerous power (filesystem, raw SQL, user/plugin management) exists but ships off, behind explicit capability switches.**
+---
+
+## Why it exists
+
+You manage SEO for many clients on WordPress. The friction: an AI assistant can't *see* a client's site — what's published, which schema exists, what Search Console actually reports — and can't *act* on it without you shuttling data between tools.
+
+WordPress MCP closes that loop. It turns each client site into a **remote MCP server**. You add it to Claude once per client with a single command; from then on the agent can list content, audit SEO, write meta to whichever SEO plugin the client runs, generate schema, publish optimised posts and products, control `llms.txt` / robots / redirects, and pull live Google data — all over one authenticated endpoint.
+
+**Design principle:** the core SEO/content work is always available and safe to delegate; the dangerous power (filesystem, raw SQL, user/plugin management) exists but ships **off**, behind explicit capability switches.
+
+---
+
+## What's new in 1.2.0
+
+**Deeper SEO / AEO / GEO**
+- 🔬 **`analyze_content`** — full single-page audit: focus-keyword placement (title, meta, slug, first paragraph, headings), density, word count, H1–H6 outline, internal/external link counts, missing-alt images, meta-length checks, AEO question-coverage + FAQ-schema detection → concrete issue list and a score.
+- 🧩 **`generate_schema`** — auto-build JSON-LD from a post: Article / BlogPosting / FAQPage / HowTo / BreadcrumbList / Product, and apply it in one call.
+- 🔗 **`internal_link_opportunities`** — find posts that mention a keyword but don't yet link to your target, with context snippets.
+- 🤖 **`manage_robots_txt`** — control AI/GEO crawlers (GPTBot, ClaudeBot, Google-Extended, PerplexityBot, CCBot…) via the site's virtual `robots.txt`.
+- ↪️ **`manage_redirects`** — managed 301/302/307/308 redirects served by the plugin.
+- 📈 **`sitekit_keyword_opportunities`** — mines Search Console for striking-distance keywords (positions 5–20, high impressions, low CTR) — the highest-ROI targets.
+
+**More dynamic filesystem**
+- ✏️ **`edit_file`** — targeted in-place edits (exact string replace, `replace_all`, or `append`/`prepend`) — no need to resend the whole file.
+- 📁 **`make_dir`** / 🔀 **`move_file`** — recursive folder create, move/rename. `write_file` now auto-creates parent directories.
+
+**Hardened transport**
+- 🛡️ **Brute-force lockout** — per-IP failure throttle on the auth endpoint (10 misses → 15-min `429`). Important when one key sits on many public client sites.
 
 ---
 
@@ -46,11 +102,11 @@ wordpress-mcp.php                 Bootstrap: constants, requires, register wpmcp
 └── includes/
     ├── class-wpmcp-plugin.php    Singleton orchestrator — builds collaborators, registers hooks
     ├── class-wpmcp-settings.php  Single option row: API key + capability-group flags
-    ├── class-wpmcp-rest.php      JSON-RPC 2.0 MCP endpoint + Bearer auth (the transport)
-    ├── class-wpmcp-tools.php     Tool registry: ~46 definitions + handlers + capability gating
+    ├── class-wpmcp-rest.php      JSON-RPC 2.0 MCP endpoint + Bearer auth + brute-force throttle
+    ├── class-wpmcp-tools.php     Tool registry: 55 definitions + handlers + capability gating
     ├── class-wpmcp-seo.php       Engine-agnostic Yoast / Rank Math normalised read+write
     ├── class-wpmcp-sitekit.php   Read-only Google Site Kit data bridge (runs as connected admin)
-    ├── class-wpmcp-frontend.php  Public output: per-post JSON-LD + /llms.txt
+    ├── class-wpmcp-frontend.php  Public output: per-post JSON-LD, /llms.txt, robots.txt, redirects
     └── class-wpmcp-admin.php     Material-3 settings screen: key, connect command, toggles, status
 ```
 
@@ -58,11 +114,11 @@ wordpress-mcp.php                 Bootstrap: constants, requires, register wpmcp
 
 | Layer | Class | Owns |
 |-------|-------|------|
-| Transport | `WPMCP_REST` | HTTP route, auth, JSON-RPC envelope, MCP method routing |
+| Transport | `WPMCP_REST` | HTTP route, auth, brute-force throttle, JSON-RPC envelope, MCP routing |
 | Dispatch | `WPMCP_Tools` | Tool definitions, capability gate, `dispatch()` → handler |
 | Domain | `WPMCP_SEO`, `WPMCP_SiteKit` | SEO field mapping; Google data fetch |
 | Persistence/config | `WPMCP_Settings` | API key, capability flags (one `wp_options` row) |
-| Public surface | `WPMCP_Frontend` | JSON-LD in `<head>`, `/llms.txt` rewrite |
+| Public surface | `WPMCP_Frontend` | JSON-LD in `<head>`, `/llms.txt`, robots.txt rules, redirects |
 | Control plane | `WPMCP_Admin` | Settings UI + form handler |
 | Wiring | `WPMCP_Plugin` | Construct + register everything on the right hooks |
 
@@ -77,8 +133,8 @@ Claude (client)                 WordPress MCP                         WordPress 
 ─────────────────────────────────────────────────────────────────────────────────────
 POST /wp-json/wp-mcp/v1/mcp
 Authorization: Bearer <key>  ─► WPMCP_REST::check_auth()
-{ "jsonrpc":"2.0",              │   hash_equals( "Bearer "+key )  ── 401 on mismatch
-  "method":"tools/call",        │
+{ "jsonrpc":"2.0",              │   brute-force lockout?  ── 429 if IP over limit
+  "method":"tools/call",        │   hash_equals( "Bearer "+key )  ── 401 on mismatch
   "params":{                    ▼
     "name":"set_seo",        WPMCP_REST::handle()  ── routes by JSON-RPC method
     "arguments":{...} } }        │
@@ -99,7 +155,7 @@ Authorization: Bearer <key>  ─► WPMCP_REST::check_auth()
 **MCP methods implemented:** `initialize`, `notifications/initialized`, `notifications/cancelled`, `ping`, `tools/list`, `tools/call`, `resources/list` (empty), `prompts/list` (empty).
 
 **Two gates on every `tools/call`:**
-1. **Transport auth** — valid Bearer key (constant-time compare), else `401`.
+1. **Transport auth** — valid Bearer key (constant-time compare) + brute-force throttle, else `401`/`429`.
 2. **Capability gate** — the tool's group must be enabled in settings, else a tool error. Tools whose group is off are also hidden from `tools/list`, so the agent never sees them.
 
 ---
@@ -110,12 +166,12 @@ Every tool is tagged with exactly one **capability group**. A group must be enab
 
 | Group | Default | Surface | Risk |
 |-------|---------|---------|------|
-| **Content & SEO** | on (locked) | Posts / pages / any CPT, terms, meta, media, JSON-LD, `llms.txt`, Yoast/Rank Math fields | Core. Safe to delegate. |
+| **Content & SEO** | on (locked) | Posts / pages / any CPT, terms, meta, media, JSON-LD, schema generation, `llms.txt`, robots.txt, redirects, Yoast/Rank Math fields | Core. Safe to delegate. |
 | **WooCommerce** | on* | Products, prices, stock, categories, product SEO | Commercial data writes |
-| **Google Site Kit** | on* | Read-only Search Console / GA4 / PageSpeed | Read-only |
+| **Google Site Kit** | on* | Read-only Search Console / GA4 / PageSpeed / keyword opportunities | Read-only |
 | **Diagnostics** | on | Site health, environment, plugin/theme inventory | Read-only |
 | **Site Management** | **off** | Install/activate plugins, switch themes, users, options | High — site control |
-| **Filesystem** | **off** | Read/write/delete files in the WP install | Critical — writing PHP = RCE |
+| **Filesystem** | **off** | Read/write/edit/move/delete files, create folders | Critical — writing PHP = RCE |
 | **Raw Database** | **off** | Raw `SELECT` + write SQL | Critical — no undo |
 
 <sub>\* WooCommerce and Site Kit tools auto-hide when the dependency plugin isn't active, regardless of the toggle.</sub>
@@ -124,21 +180,21 @@ The **Content & SEO** group is locked on — it's the reason the plugin exists. 
 
 ---
 
-## Tool catalogue (~46)
+## Tool catalogue (55)
 
-**Content & SEO** — `list_content`, `get_content`, `publish_content`, `update_content`, `delete_content`, `get_seo`, `set_seo`, `set_schema`, `get_schema`, `manage_llms_txt`, `seo_audit`, `list_taxonomies`, `list_terms`, `save_term`, `get_meta`, `set_meta`, `upload_media`, `set_image_alt`
+**Content & SEO (23)** — `list_content`, `get_content`, `publish_content`, `update_content`, `delete_content`, `get_seo`, `set_seo`, `set_schema`, `get_schema`, `generate_schema`, `analyze_content`, `internal_link_opportunities`, `manage_llms_txt`, `manage_robots_txt`, `manage_redirects`, `seo_audit`, `list_taxonomies`, `list_terms`, `save_term`, `get_meta`, `set_meta`, `upload_media`, `set_image_alt`
 
-**WooCommerce** — `list_products`, `get_product`, `update_product`, `list_product_categories`, `product_seo_audit`
+**WooCommerce (5)** — `list_products`, `get_product`, `update_product`, `list_product_categories`, `product_seo_audit`
 
-**Google Site Kit** — `sitekit_status`, `sitekit_search_analytics`, `sitekit_analytics_report`, `sitekit_pagespeed`, `sitekit_get`
+**Google Site Kit (6)** — `sitekit_status`, `sitekit_search_analytics`, `sitekit_analytics_report`, `sitekit_pagespeed`, `sitekit_keyword_opportunities`, `sitekit_get`
 
-**Diagnostics** — `site_info`, `site_health`, `seo_status`, `list_plugins`, `list_themes`
+**Diagnostics (5)** — `site_info`, `site_health`, `seo_status`, `list_plugins`, `list_themes`
 
-**Site Management** — `install_plugin`, `activate_plugin`, `deactivate_plugin`, `switch_theme`, `get_option`, `update_option`, `list_users`
+**Site Management (7)** — `install_plugin`, `activate_plugin`, `deactivate_plugin`, `switch_theme`, `get_option`, `update_option`, `list_users`
 
-**Filesystem** — `list_files`, `read_file`, `write_file`, `delete_file`
+**Filesystem (7)** — `list_files`, `read_file`, `write_file`, `edit_file`, `move_file`, `make_dir`, `delete_file`
 
-**Raw Database** — `sql_query` (read-only, OUTFILE/LOAD_FILE blocked), `sql_execute` (writes)
+**Raw Database (2)** — `sql_query` (read-only, OUTFILE/LOAD_FILE blocked), `sql_execute` (writes)
 
 Each tool ships a JSON Schema `inputSchema` so the client validates arguments before the call.
 
@@ -172,8 +228,10 @@ All writes pass through `sanitize_text_field`. The same normalisation covers **t
 
 Answer-Engine and Generative-Engine optimisation, managed by the agent and rendered by `WPMCP_Frontend`:
 
-- **JSON-LD schema** — stored per post in `_wpmcp_jsonld`, validated on write, emitted in `wp_head` on singular views. Output is encoded with `JSON_HEX_TAG|HEX_AMP|HEX_QUOT|HEX_APOS` so a string value can never break out of the `<script>` element.
+- **JSON-LD schema** — stored per post in `_wpmcp_jsonld`, validated on write, emitted in `wp_head` on singular views. Output is hex-escaped (`JSON_HEX_TAG|HEX_AMP|HEX_QUOT|HEX_APOS`) so a string value can never break out of the `<script>` element. `generate_schema` builds Article/FAQPage/HowTo/BreadcrumbList/Product JSON-LD straight from post data.
 - **`llms.txt`** — a single site-wide document served at `/llms.txt` (`text/plain`) via a rewrite rule, managed with `manage_llms_txt`. Tells generative engines what the site is and how to use it.
+- **`robots.txt` control** — `manage_robots_txt` appends managed directives to the virtual robots.txt, including explicit allow/deny for AI crawlers (GPTBot, ClaudeBot, Google-Extended, PerplexityBot, CCBot, …) — the GEO crawl-control surface.
+- **Redirects** — `manage_redirects` stores 301/302/307/308 rules served early on `template_redirect` via `wp_safe_redirect`, so reorganised content keeps its link equity.
 
 ---
 
@@ -182,10 +240,11 @@ Answer-Engine and Generative-Engine optimisation, managed by the agent and rende
 If the client already runs and has connected **Google Site Kit**, this plugin reuses its OAuth — no second authorisation, no stored Google credentials of our own. `WPMCP_SiteKit` temporarily switches to the connected administrator and issues an **internal `GET`** to Site Kit's own REST routes, then restores the previous user in a `finally` block:
 
 ```
-sitekit_search_analytics ─► request('search-console','searchanalytics', …)
-sitekit_analytics_report ─► request('analytics-4','report', …)
-sitekit_pagespeed        ─► request('pagespeed-insights','pagespeed', …)
-sitekit_get              ─► request(<module>,<datapoint>, …)   // GET passthrough, read-only
+sitekit_search_analytics      ─► request('search-console','searchanalytics', …)
+sitekit_keyword_opportunities ─► search-console queries, filtered to positions 5–20
+sitekit_analytics_report      ─► request('analytics-4','report', …)
+sitekit_pagespeed             ─► request('pagespeed-insights','pagespeed', …)
+sitekit_get                   ─► request(<module>,<datapoint>, …)   // GET passthrough, read-only
 ```
 
 All Site Kit access is **read-only** (GET data endpoints only).
@@ -199,14 +258,15 @@ All Site Kit access is **read-only** (GET data endpoints only).
 **Controls in place**
 
 - **Constant-time auth.** `hash_equals( 'Bearer ' . $key, $header )`; no early-exit string compare. 48-char URL-safe key. Regenerate instantly from settings (old key dies at once).
+- **Brute-force lockout.** Per-IP failure counter (transient): after 10 failed attempts the endpoint returns `429` for 15 minutes. A successful auth clears the counter. Hardens a key that lives on many public client sites.
 - **No cookie/CSRF surface.** The endpoint authenticates only by Bearer token; it does not honour WordPress login cookies, so cross-site requests can't ride an admin session.
 - **Capability gate server-side.** Enforced in `dispatch()`, not just hidden in `tools/list`. A disabled group's tools are unreachable.
 - **Default-safe groups.** Filesystem, Raw Database, and Site Management are **off** on a fresh install.
-- **Hardened media upload.** `upload_media` validates the filename against `get_allowed_mime_types()`, rejects script/executable extensions (`php`, `phtml`, `phar`, `svg`, `html`, …), and re-verifies the written bytes with `wp_check_filetype_and_ext` — closing the "upload `shell.php` to `/uploads`" RCE path that a naive `wp_upload_bits` leaves open.
-- **Path containment.** `safe_path()` rejects `..` segments and NUL bytes, resolves with `realpath`, and confirms the result is the WP root *or a true descendant* using a trailing-separator compare (so a sibling like `/var/www/htmlX` can't masquerade as inside `/var/www/html`).
-- **"Read-only" SQL is read-only.** `sql_query` requires a leading `SELECT/SHOW/DESCRIBE/EXPLAIN` **and** blocks `INTO OUTFILE`, `INTO DUMPFILE`, and `LOAD_FILE()` — so the read tool can't write or read files on disk.
-- **Stored-XSS hardening.** JSON-LD output is hex-escaped (above); `llms.txt` is served as `text/plain`.
-- **User-data scope.** Reading/writing user meta (emails, `wp_capabilities`) requires the **Site Management** capability, keeping it out of the default Content group.
+- **Hardened media upload.** `upload_media` validates the filename against `get_allowed_mime_types()`, rejects script/executable extensions (`php`, `phtml`, `phar`, `svg`, `html`, …), and re-verifies the written bytes with `wp_check_filetype_and_ext` — closing the "upload `shell.php` to `/uploads`" RCE path.
+- **Path containment.** `safe_path()` rejects `..` segments and NUL bytes, resolves with `realpath`, and confirms the result is the WP root *or a true descendant* using a trailing-separator compare (so a sibling like `/var/www/htmlX` can't masquerade as inside `/var/www/html`). New nested paths resolve against their nearest existing ancestor.
+- **"Read-only" SQL is read-only.** `sql_query` requires a leading `SELECT/SHOW/DESCRIBE/EXPLAIN` **and** blocks `INTO OUTFILE`, `INTO DUMPFILE`, and `LOAD_FILE()`.
+- **Stored-XSS hardening.** JSON-LD output is hex-escaped; `llms.txt` and `robots.txt` rules are served as plain text.
+- **User-data scope.** Reading/writing user meta (emails, `wp_capabilities`) requires the **Site Management** capability.
 - **HTTPS nudge.** The settings screen warns when the endpoint isn't HTTPS, since the key travels on every request.
 
 **Operational guidance**
@@ -227,39 +287,43 @@ All Site Kit access is **read-only** (GET data endpoints only).
    └─ claude mcp add --transport http <client> <endpoint> --header "Authorization: Bearer <key>"
 
 2. AUDIT (read-only, default-safe)
-   └─ site_info / seo_status            → stack & engine
-   └─ seo_audit / product_seo_audit     → gaps: missing meta, thin content, dupes, missing alt
-   └─ sitekit_search_analytics          → real queries & positions from Search Console
+   └─ site_info / seo_status               → stack & engine
+   └─ seo_audit / product_seo_audit        → gaps: missing meta, thin content, dupes, missing alt
+   └─ analyze_content <id>                  → deep per-page audit + score
+   └─ sitekit_search_analytics             → real queries & positions from Search Console
+   └─ sitekit_keyword_opportunities        → striking-distance quick wins (pos 5–20)
 
 3. PLAN
-   └─ Agent proposes target keywords, meta, schema, content from the audit + GSC data
+   └─ Agent proposes target keywords, meta, schema, internal links from the audit + GSC data
+   └─ internal_link_opportunities <id>     → where to add inbound links
 
 4. IMPLEMENT (content group)
-   └─ set_seo / set_schema              → write meta + JSON-LD to the live engine
-   └─ publish_content / update_content  → ship optimised posts/pages
-   └─ update_product                    → product copy, price, product SEO
-   └─ manage_llms_txt                   → publish/refresh llms.txt for AEO/GEO
+   └─ set_seo / generate_schema apply=true → write meta + JSON-LD to the live engine
+   └─ publish_content / update_content     → ship optimised posts/pages
+   └─ update_product                       → product copy, price, product SEO
+   └─ manage_llms_txt / manage_robots_txt  → AEO/GEO crawl signals
+   └─ manage_redirects                     → 301 old URLs on restructure
 
 5. VERIFY
-   └─ get_content / get_seo             → confirm what landed
-   └─ sitekit_pagespeed                 → Core Web Vitals after changes
+   └─ analyze_content / get_seo            → confirm what landed
+   └─ sitekit_pagespeed                    → Core Web Vitals after changes
 
 6. (optional) DEEP OPS — enable a powerful group only when needed
-   └─ install_plugin / switch_theme     → site_mgmt
-   └─ read_file / write_file            → filesystem
-   └─ sql_query                         → database
+   └─ install_plugin / switch_theme        → site_mgmt
+   └─ read_file / edit_file / write_file   → filesystem
+   └─ sql_query                            → database
    …then disable the group again.
 ```
 
 ---
 
-## Install & connect
+## Install & connect to Claude
 
 1. Copy this folder to `wp-content/plugins/wordpress-mcp/` (or upload the ZIP via *Plugins → Add New → Upload*).
 2. Activate **WordPress MCP**.
-3. Open **WordPress MCP** in the admin menu; copy the endpoint, key, and the ready-made connect command:
+3. Open **WordPress MCP** in the admin menu; copy the endpoint, key, and the ready-made connect command.
 
-**Claude Code** (Bearer header):
+**Claude Code** (Bearer header — recommended):
 
 ```bash
 claude mcp add --transport http my-client-site \
@@ -267,7 +331,7 @@ claude mcp add --transport http my-client-site \
   --header "Authorization: Bearer YOUR_KEY_HERE"
 ```
 
-**Claude chat** (web/desktop custom connector). The chat connector UI takes a URL only — no header field — so the key travels in the query string. In Claude, go to **Settings → Connectors → Add custom connector** and paste the URL shown on the settings screen:
+**Claude chat / Claude Desktop** (custom connector). The connector UI takes a URL only — no header field — so the key travels in the query string. In Claude, go to **Settings → Connectors → Add custom connector** and paste the URL shown on the settings screen:
 
 ```
 https://client.example.com/wp-json/wp-mcp/v1/mcp?key=YOUR_KEY_HERE
