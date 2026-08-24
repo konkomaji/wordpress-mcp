@@ -2,7 +2,7 @@
 /**
  * Plugin Name:       WordPress MCP
  * Plugin URI:        https://github.com/konkomaji/wordpress-mcp
- * Description:       Universal Model Context Protocol (MCP) server for WordPress. Connects any client site to Claude (chat & Claude Code) for hands-on SEO / AEO / GEO work, complete WooCommerce store operations, site-speed auditing and optimisation, and page-builder aware editing (Elementor, Gutenberg, Divi, WPBakery) — engine-agnostic Yoast or RankMath, Google Site Kit data, JSON-LD schema, llms.txt, and full content publishing. Built for digital marketers and agencies.
+ * Description:       Universal Model Context Protocol (MCP) server for WordPress. Connects any client site to Claude (chat & Claude Code) for hands-on SEO / AEO / GEO work, complete WooCommerce store operations, image handling the agent can actually see, site-speed auditing and optimisation, and page-builder aware editing (Elementor, Gutenberg, Divi, WPBakery) — engine-agnostic Yoast or RankMath, Google Site Kit data, JSON-LD schema, llms.txt, sitemap and broken-link auditing, IndexNow, and full content publishing. Writes are journalled and reversible. Built for digital marketers and agencies.
  * Version:           1.4.0
  * Requires at least: 5.6
  * Requires PHP:      7.4
