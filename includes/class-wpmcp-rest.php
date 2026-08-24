@@ -155,13 +155,46 @@ class WPMCP_REST {
 	public function handle( $request ) {
 		$body = json_decode( $request->get_body(), true );
 		if ( ! is_array( $body ) ) {
-			return new WP_REST_Response( $this->error( null, -32700, 'Parse error' ), 200 );
+			return new WP_REST_Response(
+				$this->error( null, -32700, 'Parse error: the request body is not valid JSON (' . json_last_error_msg() . ').' ),
+				200
+			);
 		}
 
 		$id     = $body['id'] ?? null;
 		$method = $body['method'] ?? '';
 		$params = isset( $body['params'] ) && is_array( $body['params'] ) ? $body['params'] : [];
 
+		try {
+			return $this->route( $id, $method, $params );
+		} catch ( Throwable $e ) {
+			// A failure outside tool execution (building the catalogue, for
+			// instance) still has to come back as valid JSON-RPC.
+			WPMCP_Errors::log(
+				[
+					'tool'    => 'rest:' . $method,
+					'code'    => WPMCP_Errors::TOOL_FAILED,
+					'message' => $e->getMessage(),
+					'file'    => WPMCP_Errors::relative_path( $e->getFile() ),
+					'line'    => $e->getLine(),
+				]
+			);
+			return new WP_REST_Response(
+				$this->error( $id, -32603, 'Internal error handling ' . $method . ': ' . $e->getMessage() ),
+				200
+			);
+		}
+	}
+
+	/**
+	 * Route a decoded JSON-RPC message to its MCP method.
+	 *
+	 * @param mixed  $id     JSON-RPC id.
+	 * @param string $method Method name.
+	 * @param array  $params Params.
+	 * @return WP_REST_Response
+	 */
+	private function route( $id, $method, $params ) {
 		switch ( $method ) {
 			case 'initialize':
 				return new WP_REST_Response(
@@ -174,6 +207,7 @@ class WPMCP_REST {
 								'name'    => 'wordpress-mcp',
 								'version' => WPMCP_VERSION,
 							],
+							'instructions'    => $this->instructions(),
 						]
 					),
 					200
@@ -207,6 +241,32 @@ class WPMCP_REST {
 	}
 
 	/**
+	 * Orientation text handed to the client on initialize, so the agent knows
+	 * what this particular site is before it calls anything.
+	 *
+	 * @return string
+	 */
+	private function instructions() {
+		$lines = [
+			sprintf( 'WordPress MCP on "%s" (%s).', get_bloginfo( 'name' ), home_url() ),
+			'Start with site_info and mcp_status to see the stack and which capability groups are enabled.',
+			'Errors come back as JSON with a "code" and usually a "hint" — read the hint before retrying.',
+			'Destructive and site-wide tools (bulk_update_products, search_replace_content, optimize_site, database_cleanup, update_inventory by category) default to dry_run=true. Review the preview, then repeat the call with dry_run=false.',
+		];
+		if ( class_exists( 'WooCommerce' ) ) {
+			$lines[] = 'WooCommerce is active: use list_products/get_product/update_product for the catalogue, and generate_product_variations for variable products.';
+		}
+		$engine = WPMCP_SEO::provider();
+		if ( 'none' !== $engine ) {
+			$lines[] = sprintf( 'SEO fields write through %s automatically — always use the normalised set_seo fields rather than raw meta keys.', 'yoast' === $engine ? 'Yoast SEO' : 'Rank Math' );
+		}
+		if ( WPMCP_Settings::can( 'filesystem' ) ) {
+			$lines[] = 'Filesystem writes are syntax-checked for PHP and backed up automatically; restore_file undoes a bad edit.';
+		}
+		return implode( ' ', $lines );
+	}
+
+	/**
 	 * Execute a tool and wrap the result in MCP content blocks.
 	 *
 	 * @param mixed $id     JSON-RPC id.
@@ -224,26 +284,55 @@ class WPMCP_REST {
 		try {
 			$data = $this->tools->dispatch( $name, $args );
 			$text = wp_json_encode( $data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE );
+			if ( false === $text ) {
+				// Almost always invalid UTF-8 from a legacy database column.
+				$text = wp_json_encode(
+					[
+						'error' => 'The result could not be encoded as JSON.',
+						'code'  => WPMCP_Errors::TOOL_FAILED,
+						'hint'  => 'The data probably contains invalid UTF-8. Narrow the query and try again.',
+					],
+					JSON_PRETTY_PRINT
+				);
+			}
 			return $this->result(
 				$id,
 				[
 					'content' => [
 						[
 							'type' => 'text',
-							'text' => false === $text ? '(unserialisable result)' : $text,
+							'text' => $text,
 						],
 					],
 				]
 			);
 		} catch ( Throwable $e ) {
 			// Tool-level errors are reported inside result with isError, per MCP.
+			// The body is structured JSON so the client can branch on `code`
+			// and act on `hint` instead of parsing an English sentence.
+			$payload = [
+				'error' => true,
+				'tool'  => $name,
+				'code'  => $e instanceof WPMCP_Tool_Exception ? $e->get_error_code() : WPMCP_Errors::TOOL_FAILED,
+				'message' => $e->getMessage(),
+			];
+			if ( $e instanceof WPMCP_Tool_Exception ) {
+				if ( $e->get_hint() ) {
+					$payload['hint'] = $e->get_hint();
+				}
+				if ( $e->get_details() ) {
+					$payload['details'] = $e->get_details();
+				}
+			}
+			$text = wp_json_encode( $payload, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE );
+
 			return $this->result(
 				$id,
 				[
 					'content' => [
 						[
 							'type' => 'text',
-							'text' => 'Error: ' . $e->getMessage(),
+							'text' => false === $text ? 'Error: ' . $e->getMessage() : $text,
 						],
 					],
 					'isError' => true,

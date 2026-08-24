@@ -30,8 +30,28 @@ class WPMCP_Settings {
 				'locked'  => true,
 			],
 			'woocommerce' => [
-				'label'   => __( 'WooCommerce', 'wordpress-mcp' ),
-				'desc'    => __( 'Read and optimise WooCommerce products, prices, stock, categories, and product SEO.', 'wordpress-mcp' ),
+				'label'   => __( 'WooCommerce catalogue', 'wordpress-mcp' ),
+				'desc'    => __( 'Full product management: create/update/delete products, variations, attributes, categories, images, pricing and bulk repricing, inventory, coupons, store settings, and product SEO.', 'wordpress-mcp' ),
+				'default' => true,
+			],
+			'wc_orders'   => [
+				'label'   => __( 'WooCommerce orders & customers', 'wordpress-mcp' ),
+				'desc'    => __( 'Read and manage orders, order notes, refunds, and customer records. Contains personal data and can move money — leave off unless the engagement covers order operations.', 'wordpress-mcp' ),
+				'default' => false,
+			],
+			'performance' => [
+				'label'   => __( 'Performance', 'wordpress-mcp' ),
+				'desc'    => __( 'Speed auditing and optimisation: measure the site, apply front-end tweaks, clean the database, purge caches, and report on image weight.', 'wordpress-mcp' ),
+				'default' => true,
+			],
+			'builders'    => [
+				'label'   => __( 'Page builders', 'wordpress-mcp' ),
+				'desc'    => __( 'Edit pages in whatever built them — Elementor, Gutenberg blocks, Divi, WPBakery, Beaver Builder. Read the layout as a tree, change individual elements, insert sections, and manage global colours and fonts.', 'wordpress-mcp' ),
+				'default' => true,
+			],
+			'appearance'  => [
+				'label'   => __( 'Appearance', 'wordpress-mcp' ),
+				'desc'    => __( 'Navigation menus, widgets and sidebars, customizer theme mods, and site identity (title, tagline, logo, favicon, front page).', 'wordpress-mcp' ),
 				'default' => true,
 			],
 			'sitekit'     => [
@@ -51,7 +71,7 @@ class WPMCP_Settings {
 			],
 			'filesystem'  => [
 				'label'   => __( 'Filesystem', 'wordpress-mcp' ),
-				'desc'    => __( 'Read, write, edit (in-place string replace / append / prepend), move, delete files and create folders inside the WordPress install. Writing PHP changes the live site immediately. High risk.', 'wordpress-mcp' ),
+				'desc'    => __( 'Read, search, write, edit, copy, move and delete files, create folders, and scaffold child themes inside the WordPress install. PHP is syntax-checked and backups are kept before every overwrite, but writing PHP still changes the live site immediately. High risk.', 'wordpress-mcp' ),
 				'default' => false,
 			],
 			'database'    => [

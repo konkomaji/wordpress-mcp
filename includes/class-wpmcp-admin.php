@@ -89,6 +89,11 @@ class WPMCP_Admin {
 		.wpmcp-status{font-size:13px;line-height:1.6;color:#44464f}
 		.wpmcp-status b{color:#1b1b1f}
 		.wpmcp-notice{background:#e1e0f7;color:#1b1b50;border-radius:16px;padding:12px 18px;margin:0 0 18px;font-size:13px}
+		.wpmcp-count{font-size:11px;color:#5f6076;background:#f3f0f4;border-radius:100px;padding:2px 9px;font-weight:400}
+		.wpmcp-log{width:100%;border-collapse:collapse;font-size:12.5px}
+		.wpmcp-log th{text-align:left;color:#44464f;font-weight:500;padding:6px 8px;border-bottom:1px solid #e3e2e6}
+		.wpmcp-log td{padding:6px 8px;border-bottom:1px solid #f0eff2;vertical-align:top}
+		.wpmcp-log code{background:#f3f0f4;border-radius:6px;padding:1px 6px;font-size:11.5px}
 		';
 		wp_register_style( 'wpmcp-admin', false );
 		wp_enqueue_style( 'wpmcp-admin' );
@@ -107,6 +112,11 @@ class WPMCP_Admin {
 		if ( isset( $_POST['wpmcp_regenerate'] ) ) {
 			WPMCP_Settings::regenerate_key();
 			$this->redirect( 'regenerated' );
+		}
+
+		if ( isset( $_POST['wpmcp_clear_log'] ) ) {
+			WPMCP_Errors::clear_log();
+			$this->redirect( 'log_cleared' );
 		}
 
 		$settings = WPMCP_Settings::all();
@@ -163,6 +173,15 @@ class WPMCP_Admin {
 		$seo      = WPMCP_SEO::status();
 		$sitekit  = WPMCP_SiteKit::status();
 		$state    = isset( $_GET['wpmcp_state'] ) ? sanitize_key( wp_unslash( $_GET['wpmcp_state'] ) ) : '';
+
+		// Tool counts per group, so the screen shows what each switch exposes.
+		$tool_counts = [];
+		$total_tools = 0;
+		foreach ( wpmcp()->tools->definitions() as $tool ) {
+			$tool_counts[ $tool['group'] ] = ( $tool_counts[ $tool['group'] ] ?? 0 ) + 1;
+			$total_tools++;
+		}
+		$errors = WPMCP_Errors::get_log();
 		?>
 		<div class="wrap wpmcp-wrap">
 			<h1><span class="dashicons dashicons-rest-api" style="font-size:30px;width:30px;height:30px"></span> WordPress MCP</h1>
@@ -172,6 +191,8 @@ class WPMCP_Admin {
 				<div class="wpmcp-notice"><?php esc_html_e( 'Settings saved.', 'wordpress-mcp' ); ?></div>
 			<?php elseif ( 'regenerated' === $state ) : ?>
 				<div class="wpmcp-notice"><?php esc_html_e( 'New API key generated. Update your MCP client — the old key no longer works.', 'wordpress-mcp' ); ?></div>
+			<?php elseif ( 'log_cleared' === $state ) : ?>
+				<div class="wpmcp-notice"><?php esc_html_e( 'Error log cleared.', 'wordpress-mcp' ); ?></div>
 			<?php endif; ?>
 
 			<?php if ( 0 !== strpos( strtolower( $endpoint ), 'https://' ) ) : ?>
@@ -211,11 +232,20 @@ class WPMCP_Admin {
 				<input type="hidden" name="action" value="wpmcp_save">
 				<div class="wpmcp-card">
 					<h2><?php esc_html_e( 'Capabilities', 'wordpress-mcp' ); ?></h2>
-					<p class="wpmcp-sub" style="margin-bottom:18px"><?php esc_html_e( 'Each group exposes a set of MCP tools. Leave the powerful groups off unless an engagement needs them — agency-safe by default.', 'wordpress-mcp' ); ?></p>
+					<p class="wpmcp-sub" style="margin-bottom:18px">
+						<?php
+						printf(
+							/* translators: %d: total number of tools */
+							esc_html__( 'Each group exposes a set of MCP tools (%d in total). Leave the powerful groups off unless an engagement needs them — agency-safe by default.', 'wordpress-mcp' ),
+							(int) $total_tools
+						);
+						?>
+					</p>
 					<?php foreach ( WPMCP_Settings::groups() as $gkey => $group ) :
 						$on     = ! empty( $settings['capabilities'][ $gkey ] );
 						$locked = ! empty( $group['locked'] );
-						$risk   = in_array( $gkey, [ 'filesystem', 'database', 'site_mgmt' ], true );
+						$risk   = in_array( $gkey, [ 'filesystem', 'database', 'site_mgmt', 'wc_orders' ], true );
+						$count  = $tool_counts[ $gkey ] ?? 0;
 						?>
 						<div class="wpmcp-toggle">
 							<label class="wpmcp-switch">
@@ -225,6 +255,9 @@ class WPMCP_Admin {
 							<div class="wpmcp-toggle-main">
 								<div class="wpmcp-toggle-title">
 									<?php echo esc_html( $group['label'] ); ?>
+									<?php if ( $count ) : ?>
+										<span class="wpmcp-count"><?php echo esc_html( sprintf( _n( '%d tool', '%d tools', $count, 'wordpress-mcp' ), $count ) ); ?></span>
+									<?php endif; ?>
 									<?php if ( $locked ) : ?>
 										<span class="wpmcp-pill wpmcp-pill-on"><?php esc_html_e( 'Always on', 'wordpress-mcp' ); ?></span>
 									<?php elseif ( $risk ) : ?>
@@ -273,6 +306,39 @@ class WPMCP_Admin {
 						<br><?php echo esc_html( $sitekit['note'] ); ?>
 					</p>
 				</div>
+			</div>
+
+			<div class="wpmcp-card">
+				<h2><?php esc_html_e( 'Recent tool errors', 'wordpress-mcp' ); ?></h2>
+				<?php if ( ! $errors ) : ?>
+					<p class="wpmcp-status"><?php esc_html_e( 'No tool failures recorded. Anything that goes wrong on the MCP endpoint is logged here with its cause.', 'wordpress-mcp' ); ?></p>
+				<?php else : ?>
+					<table class="wpmcp-log">
+						<thead>
+							<tr>
+								<th><?php esc_html_e( 'When', 'wordpress-mcp' ); ?></th>
+								<th><?php esc_html_e( 'Tool', 'wordpress-mcp' ); ?></th>
+								<th><?php esc_html_e( 'Code', 'wordpress-mcp' ); ?></th>
+								<th><?php esc_html_e( 'Message', 'wordpress-mcp' ); ?></th>
+							</tr>
+						</thead>
+						<tbody>
+						<?php foreach ( array_slice( $errors, 0, 10 ) as $entry ) : ?>
+							<tr>
+								<td><?php echo esc_html( $entry['time'] ?? '' ); ?></td>
+								<td><code><?php echo esc_html( $entry['tool'] ?? '' ); ?></code></td>
+								<td><code><?php echo esc_html( $entry['code'] ?? '' ); ?></code></td>
+								<td><?php echo esc_html( $entry['message'] ?? '' ); ?></td>
+							</tr>
+						<?php endforeach; ?>
+						</tbody>
+					</table>
+					<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" style="margin-top:14px">
+						<?php wp_nonce_field( 'wpmcp_save' ); ?>
+						<input type="hidden" name="action" value="wpmcp_save">
+						<button type="submit" name="wpmcp_clear_log" value="1" class="wpmcp-btn wpmcp-btn-tonal"><span class="dashicons dashicons-trash"></span> <?php esc_html_e( 'Clear log', 'wordpress-mcp' ); ?></button>
+					</form>
+				<?php endif; ?>
 			</div>
 
 			<p class="wpmcp-sub" style="text-align:center">

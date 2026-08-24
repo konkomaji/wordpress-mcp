@@ -72,10 +72,28 @@ class WPMCP_Frontend {
 			}
 			$from = untrailingslashit( '/' . ltrim( $entry['from'], '/' ) );
 			if ( $from === $path ) {
-				$to   = $entry['to'];
+				$to   = (string) $entry['to'];
 				$dest = preg_match( '#^https?://#i', $to ) ? $to : home_url( '/' . ltrim( $to, '/' ) );
 				$code = isset( $entry['code'] ) ? (int) $entry['code'] : 301;
-				wp_safe_redirect( $dest, in_array( $code, [ 301, 302, 307, 308 ], true ) ? $code : 301 );
+				$code = in_array( $code, [ 301, 302, 307, 308 ], true ) ? $code : 301;
+
+				// wp_safe_redirect() sends any off-host destination to wp-admin
+				// instead. A redirect rule an administrator deliberately stored
+				// is allowed to leave the site, so whitelist that one host for
+				// the duration of this redirect and keep the safe validation
+				// (scheme checks, header splitting) that wraps it.
+				$host = wp_parse_url( $dest, PHP_URL_HOST );
+				if ( $host ) {
+					$allow = function ( $hosts ) use ( $host ) {
+						$hosts[] = $host;
+						return $hosts;
+					};
+					add_filter( 'allowed_redirect_hosts', $allow );
+					wp_safe_redirect( $dest, $code );
+					remove_filter( 'allowed_redirect_hosts', $allow );
+				} else {
+					wp_safe_redirect( $dest, $code );
+				}
 				exit;
 			}
 		}

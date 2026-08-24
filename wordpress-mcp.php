@@ -2,8 +2,8 @@
 /**
  * Plugin Name:       WordPress MCP
  * Plugin URI:        https://github.com/konkomaji/wordpress-mcp
- * Description:        Universal Model Context Protocol (MCP) server for WordPress. Connects any client site to Claude (chat & Claude Code) for hands-on SEO / AEO / GEO work — engine-agnostic Yoast or RankMath, WooCommerce product SEO, Google Site Kit search & analytics data, JSON-LD schema, llms.txt, and full content publishing. Built for digital marketers and SEO agencies.
- * Version:           1.2.0
+ * Description:       Universal Model Context Protocol (MCP) server for WordPress. Connects any client site to Claude (chat & Claude Code) for hands-on SEO / AEO / GEO work, complete WooCommerce store operations, site-speed auditing and optimisation, and page-builder aware editing (Elementor, Gutenberg, Divi, WPBakery) — engine-agnostic Yoast or RankMath, Google Site Kit data, JSON-LD schema, llms.txt, and full content publishing. Built for digital marketers and agencies.
+ * Version:           1.3.0
  * Requires at least: 5.6
  * Requires PHP:      7.4
  * Author:            Konko Maji
@@ -21,7 +21,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-define( 'WPMCP_VERSION', '1.2.0' );
+define( 'WPMCP_VERSION', '1.3.0' );
 define( 'WPMCP_NAMESPACE', 'wp-mcp/v1' );
 define( 'WPMCP_OPTION', 'wpmcp_settings' );
 define( 'WPMCP_FILE', __FILE__ );
@@ -29,9 +29,13 @@ define( 'WPMCP_DIR', plugin_dir_path( __FILE__ ) );
 define( 'WPMCP_URL', plugin_dir_url( __FILE__ ) );
 define( 'WPMCP_AUTHOR_URL', 'https://www.linkedin.com/in/konkomaji/' );
 
+require_once WPMCP_DIR . 'includes/class-wpmcp-util.php';
+require_once WPMCP_DIR . 'includes/class-wpmcp-error.php';
+require_once WPMCP_DIR . 'includes/class-wpmcp-validator.php';
 require_once WPMCP_DIR . 'includes/class-wpmcp-settings.php';
 require_once WPMCP_DIR . 'includes/class-wpmcp-seo.php';
 require_once WPMCP_DIR . 'includes/class-wpmcp-sitekit.php';
+require_once WPMCP_DIR . 'includes/class-wpmcp-performance.php';
 require_once WPMCP_DIR . 'includes/class-wpmcp-tools.php';
 require_once WPMCP_DIR . 'includes/class-wpmcp-rest.php';
 require_once WPMCP_DIR . 'includes/class-wpmcp-frontend.php';
