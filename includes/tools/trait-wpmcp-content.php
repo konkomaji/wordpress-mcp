@@ -190,7 +190,7 @@ trait WPMCP_Content_Tools {
 			[
 				'group'       => 'content',
 				'name'        => 'set_seo',
-				'description' => 'Write normalised SEO fields for a post or term. Engine-agnostic: works whether Yoast or Rank Math is active. Fields: title, description, focus_keyword, canonical, noindex, nofollow, og_title, og_description, twitter_title, twitter_description.',
+				'description' => 'Write normalised SEO fields for a post or term. Engine-agnostic: works whether Yoast or Rank Math is active. Fields: title, description, focus_keyword, canonical, noindex, nofollow, og_title, og_description, og_image, twitter_title, twitter_description, twitter_image. The image fields take an attachment ID or a URL and set both the URL and the ID the SEO plugin needs, which is what makes the social preview actually render.',
 				'inputSchema' => [
 					'type'       => 'object',
 					'properties' => [
@@ -223,6 +223,41 @@ trait WPMCP_Content_Tools {
 					'type'       => 'object',
 					'properties' => [ 'id' => [ 'type' => 'integer' ] ],
 					'required'   => [ 'id' ],
+				],
+			],
+			[
+				'group'       => 'content',
+				'name'        => 'bulk_set_seo',
+				'description' => 'Write SEO titles and meta descriptions across many posts, pages or products at once from a template, instead of one call each. Placeholders: {title}, {excerpt}, {site}, {tagline}, {category}, {sku}, {price}, {brand}, {separator}. Skips anything that already has a value unless told otherwise, checks each result against the pixel width Google actually renders, and is a dry run by default.',
+				'inputSchema' => [
+					'type'       => 'object',
+					'properties' => [
+						'post_type'         => [ 'type' => 'string', 'description' => 'Post type to walk. Default post.' ],
+						'ids'               => [ 'type' => 'array', 'description' => 'Specific post IDs instead of a whole type.' ],
+						'title_template'    => [ 'type' => 'string', 'description' => 'Template for the SEO title, e.g. "{title} {separator} {site}".' ],
+						'description_template' => [ 'type' => 'string', 'description' => 'Template for the meta description.' ],
+						'focus_keyword_template' => [ 'type' => 'string', 'description' => 'Template for the focus keyword.' ],
+						'separator'         => [ 'type' => 'string', 'description' => 'What {separator} renders as. Default |.' ],
+						'only_missing'      => [ 'type' => 'boolean', 'description' => 'Skip posts that already have that field. Default true.' ],
+						'limit'             => [ 'type' => 'integer', 'description' => 'Posts per run. Default 100, max 1000.' ],
+						'offset'            => [ 'type' => 'integer', 'description' => 'Where to resume. Default 0.' ],
+						'dry_run'           => [ 'type' => 'boolean', 'description' => 'Default TRUE. Set false to apply.' ],
+					],
+				],
+			],
+			[
+				'group'       => 'content',
+				'name'        => 'serp_preview',
+				'description' => 'Show how a page will look in Google: the title and description that will actually be used, their rendered pixel width, and where each one gets truncated. Character counts mislead — "Illinois" and "MMMMMMMM" are both eight characters and one is three times wider. Pass post IDs, or raw title/description text to check a draft before writing it.',
+				'inputSchema' => [
+					'type'       => 'object',
+					'properties' => [
+						'ids'         => [ 'type' => 'array', 'description' => 'Post IDs to preview.' ],
+						'id'          => [ 'type' => 'integer', 'description' => 'A single post ID.' ],
+						'title'       => [ 'type' => 'string', 'description' => 'Raw title text to measure instead of a post.' ],
+						'description' => [ 'type' => 'string', 'description' => 'Raw meta description text to measure.' ],
+						'device'      => [ 'type' => 'string', 'description' => 'desktop (default) or mobile — the truncation width differs.' ],
+					],
 				],
 			],
 			[
@@ -423,18 +458,24 @@ trait WPMCP_Content_Tools {
 			[
 				'group'       => 'content',
 				'name'        => 'upload_media',
-				'description' => 'Add a file to the media library, either from base64 bytes or by downloading a source_url. Optionally sets title, alt text, caption, description, and a parent post.',
+				'description' => 'Add a file to the media library from base64 bytes, a source_url the server downloads, or a path already on the server. Sets title, alt, caption, description and parent post, can rename the file after a human name for image SEO, skips the upload when the library already holds identical bytes, and can downscale or convert images on the way in.',
 				'inputSchema' => [
 					'type'       => 'object',
 					'properties' => [
-						'filename'    => [ 'type' => 'string', 'description' => 'Required with content; optional with source_url.' ],
-						'content'     => [ 'type' => 'string', 'description' => 'Base64-encoded bytes.' ],
-						'source_url'  => [ 'type' => 'string', 'description' => 'Download the file from this URL instead of passing bytes.' ],
-						'title'       => [ 'type' => 'string' ],
-						'alt'         => [ 'type' => 'string' ],
-						'caption'     => [ 'type' => 'string' ],
-						'description' => [ 'type' => 'string' ],
-						'post_id'     => [ 'type' => 'integer' ],
+						'filename'      => [ 'type' => 'string', 'description' => 'Required with content; optional with source_url.' ],
+						'content'       => [ 'type' => 'string', 'description' => 'Base64-encoded bytes. A data: URI is accepted.' ],
+						'source_url'    => [ 'type' => 'string', 'description' => 'Download the file from this URL instead of passing bytes.' ],
+						'path'          => [ 'type' => 'string', 'description' => 'A file already on the server, relative to the WordPress root. Needs the Filesystem capability.' ],
+						'seo_name'      => [ 'type' => 'string', 'description' => 'Rename the file after this human name, e.g. "Black Cotton Hoodie" becomes black-cotton-hoodie.jpg.' ],
+						'title'         => [ 'type' => 'string' ],
+						'alt'           => [ 'type' => 'string' ],
+						'caption'       => [ 'type' => 'string' ],
+						'description'   => [ 'type' => 'string' ],
+						'post_id'       => [ 'type' => 'integer' ],
+						'dedup'         => [ 'type' => 'boolean', 'description' => 'Reuse an existing attachment with identical bytes instead of creating a duplicate. Default true.' ],
+						'max_dimension' => [ 'type' => 'integer', 'description' => 'Downscale images so neither side exceeds this. Default 0 (leave alone).' ],
+						'convert'       => [ 'type' => 'string', 'description' => 'webp | avif | jpg | png. Omit to keep the source format.' ],
+						'quality'       => [ 'type' => 'integer', 'description' => 'Encoder quality 1-100 when resizing or converting.' ],
 					],
 				],
 			],
@@ -920,6 +961,7 @@ trait WPMCP_Content_Tools {
 					}
 				}
 				if ( count( $update ) > 1 ) {
+					WPMCP_Journal::post_fields( $id, array_keys( array_diff_key( $update, [ 'ID' => 1 ] ) ) );
 					$res = wp_update_post( $update, true );
 					if ( is_wp_error( $res ) ) {
 						throw new Exception( $res->get_error_message() );
@@ -927,6 +969,7 @@ trait WPMCP_Content_Tools {
 				}
 				if ( ! empty( $set['meta'] ) && is_array( $set['meta'] ) ) {
 					foreach ( $set['meta'] as $k => $v ) {
+						WPMCP_Journal::post_meta( $id, $k );
 						update_post_meta( $id, $k, $v );
 					}
 				}
@@ -1030,6 +1073,7 @@ trait WPMCP_Content_Tools {
 				'occurrences' => $counts,
 			];
 			if ( ! $dry ) {
+				WPMCP_Journal::post_fields( $p->ID, array_keys( array_diff_key( $update, [ 'ID' => 1 ] ) ) );
 				$res = wp_update_post( $update, true );
 				if ( ! is_wp_error( $res ) ) {
 					$changed++;
@@ -1083,6 +1127,7 @@ trait WPMCP_Content_Tools {
 			if ( ! get_post( $id ) ) {
 				throw new Exception( 'Post not found' );
 			}
+			WPMCP_Journal::post_seo( $id );
 			$seo = WPMCP_SEO::set_post_seo( $id, $fields );
 		}
 		return [ 'success' => true, 'id' => $id, 'seo' => $seo ];
@@ -1107,6 +1152,7 @@ trait WPMCP_Content_Tools {
 		if ( false === $json ) {
 			throw new Exception( 'Invalid schema — could not encode to JSON' );
 		}
+		WPMCP_Journal::post_meta( $id, WPMCP_Frontend::JSONLD_META );
 		update_post_meta( $id, WPMCP_Frontend::JSONLD_META, wp_slash( $json ) );
 		return [ 'success' => true, 'id' => $id, 'schema' => $schema ];
 	}
@@ -1177,7 +1223,13 @@ trait WPMCP_Content_Tools {
 		$titles        = [];
 		$scanned       = 0;
 
+		WPMCP_Progress::start( 'seo_audit', count( $q->posts ), 'auditing content' );
+
 		foreach ( $q->posts as $post_id ) {
+			if ( WPMCP_Progress::should_stop() ) {
+				break;
+			}
+			WPMCP_Progress::tick();
 			$post_id = (int) $post_id;
 			$p       = get_post( $post_id );
 			if ( ! $p ) {
@@ -1458,89 +1510,44 @@ trait WPMCP_Content_Tools {
 	 * @return array
 	 */
 	private function tool_upload_media( $args ) {
-		require_once ABSPATH . 'wp-admin/includes/image.php';
-		require_once ABSPATH . 'wp-admin/includes/file.php';
-		require_once ABSPATH . 'wp-admin/includes/media.php';
-
-		$source_url = trim( (string) ( $args['source_url'] ?? '' ) );
-		$filename   = sanitize_file_name( (string) ( $args['filename'] ?? '' ) );
-
-		if ( '' !== $source_url ) {
-			if ( ! wp_http_validate_url( $source_url ) ) {
-				throw new Exception( 'source_url is not a valid, fetchable URL' );
-			}
-			if ( '' === $filename ) {
-				$filename = sanitize_file_name( basename( (string) wp_parse_url( $source_url, PHP_URL_PATH ) ) );
-			}
-			$this->assert_uploadable_filename( $filename );
-			$tmp = download_url( $source_url, 60 );
-			if ( is_wp_error( $tmp ) ) {
-				throw new Exception( 'Download failed: ' . $tmp->get_error_message() );
-			}
-			$file = [
-				'name'     => $filename,
-				'tmp_name' => $tmp,
-			];
-			$attach_id = media_handle_sideload( $file, (int) ( $args['post_id'] ?? 0 ), $args['title'] ?? null );
-			if ( is_wp_error( $attach_id ) ) {
-				if ( file_exists( $tmp ) ) {
-					@unlink( $tmp ); // phpcs:ignore WordPress.PHP.NoSilencedErrors
-				}
-				throw new Exception( $attach_id->get_error_message() );
-			}
+		$source = [];
+		if ( ! empty( $args['source_url'] ) ) {
+			$source['url'] = (string) $args['source_url'];
+		} elseif ( ! empty( $args['content'] ) ) {
+			$source['base64'] = (string) $args['content'];
+		} elseif ( ! empty( $args['path'] ) ) {
+			$source['path'] = (string) $args['path'];
 		} else {
-			if ( '' === $filename ) {
-				throw new Exception( 'filename is required when uploading base64 content' );
-			}
-			if ( ! isset( $args['content'] ) || '' === $args['content'] ) {
-				throw new Exception( 'Provide either content (base64) or source_url' );
-			}
-			$this->assert_uploadable_filename( $filename );
-			$bits = wp_upload_bits( $filename, null, base64_decode( $args['content'] ) );
-			if ( ! empty( $bits['error'] ) ) {
-				throw new Exception( $bits['error'] );
-			}
-			// Verify the real bytes match an allowed type, not just the name.
-			$verify = wp_check_filetype_and_ext( $bits['file'], $filename );
-			if ( empty( $verify['type'] ) ) {
-				@unlink( $bits['file'] ); // phpcs:ignore WordPress.PHP.NoSilencedErrors
-				throw new Exception( 'File content does not match an allowed media type.' );
-			}
-			$filetype  = wp_check_filetype( $bits['file'] );
-			$attach_id = wp_insert_attachment(
-				[
-					'post_mime_type' => $filetype['type'],
-					'post_title'     => $args['title'] ?? $filename,
-					'post_status'    => 'inherit',
-				],
-				$bits['file'],
-				(int) ( $args['post_id'] ?? 0 )
+			WPMCP_Errors::fail(
+				WPMCP_Errors::MISSING_ARGUMENT,
+				'Nothing to upload.',
+				'Provide content (base64 bytes plus filename), source_url, or path.',
+				[ 'accepted' => [ 'content', 'source_url', 'path' ] ]
 			);
-			if ( is_wp_error( $attach_id ) ) {
-				throw new Exception( $attach_id->get_error_message() );
-			}
-			wp_update_attachment_metadata( $attach_id, wp_generate_attachment_metadata( $attach_id, $bits['file'] ) );
+		}
+		if ( ! empty( $args['filename'] ) ) {
+			$source['filename'] = (string) $args['filename'];
 		}
 
-		if ( ! empty( $args['alt'] ) ) {
-			update_post_meta( $attach_id, '_wp_attachment_image_alt', sanitize_text_field( $args['alt'] ) );
-		}
-		$post_update = [ 'ID' => $attach_id ];
-		if ( isset( $args['caption'] ) ) {
-			$post_update['post_excerpt'] = $args['caption'];
-		}
-		if ( isset( $args['description'] ) ) {
-			$post_update['post_content'] = $args['description'];
-		}
-		if ( count( $post_update ) > 1 ) {
-			wp_update_post( $post_update );
-		}
-
-		return [
-			'success'       => true,
-			'attachment_id' => $attach_id,
-			'url'           => wp_get_attachment_url( $attach_id ),
+		$opts = [
+			'post_id'       => (int) ( $args['post_id'] ?? 0 ),
+			'dedup'         => ! isset( $args['dedup'] ) || WPMCP_Util::bool( $args['dedup'], true ),
+			'max_dimension' => max( 0, (int) ( $args['max_dimension'] ?? 0 ) ),
+			'convert'       => strtolower( trim( (string) ( $args['convert'] ?? '' ) ) ),
+			'quality'       => (int) ( $args['quality'] ?? 0 ),
 		];
+		foreach ( [ 'filename', 'seo_name', 'title', 'alt', 'caption', 'description' ] as $field ) {
+			if ( isset( $args[ $field ] ) ) {
+				$opts[ $field ] = (string) $args[ $field ];
+			}
+		}
+
+		$result = WPMCP_Media::ingest( $source, $opts );
+
+		return array_merge(
+			[ 'success' => true, 'attachment_id' => $result['id'] ],
+			$result
+		);
 	}
 
 	/**
@@ -1551,17 +1558,7 @@ trait WPMCP_Content_Tools {
 	 * @throws Exception When the type is not permitted.
 	 */
 	private function assert_uploadable_filename( $filename ) {
-		// Only allow types WordPress itself permits for uploads. This blocks
-		// PHP and other executable payloads from reaching the uploads dir.
-		$checked = wp_check_filetype( $filename, get_allowed_mime_types() );
-		if ( empty( $checked['ext'] ) || empty( $checked['type'] ) ) {
-			throw new Exception( 'Disallowed file type. Only standard WordPress-permitted media types may be uploaded.' );
-		}
-		// Defence in depth: reject script / executable extensions even if a
-		// filter widened the allowed-mime list (e.g. double extensions).
-		if ( preg_match( '/\.(php\d?|phtml|phps|phar|cgi|pl|py|rb|sh|bash|exe|com|bat|cmd|js|mjs|htm|html|svg|xhtml)(\.|$)/i', $filename ) ) {
-			throw new Exception( 'Executable or script file types are not permitted.' );
-		}
+		WPMCP_Media::assert_uploadable_filename( $filename );
 	}
 
 	/**
@@ -1651,6 +1648,7 @@ trait WPMCP_Content_Tools {
 			throw new Exception( 'Attachment not found' );
 		}
 		if ( isset( $args['alt_text'] ) ) {
+			WPMCP_Journal::post_meta( $id, '_wp_attachment_image_alt' );
 			update_post_meta( $id, '_wp_attachment_image_alt', sanitize_text_field( $args['alt_text'] ) );
 		}
 		$update = [ 'ID' => $id ];
@@ -2029,12 +2027,349 @@ trait WPMCP_Content_Tools {
 	}
 
 	/**
+	 * @param array $args Args.
+	 * @return array
+	 */
+	private function tool_bulk_set_seo( $args ) {
+		$templates = array_filter(
+			[
+				'title'         => (string) ( $args['title_template'] ?? '' ),
+				'description'   => (string) ( $args['description_template'] ?? '' ),
+				'focus_keyword' => (string) ( $args['focus_keyword_template'] ?? '' ),
+			],
+			function ( $value ) {
+				return '' !== trim( $value );
+			}
+		);
+		if ( ! $templates ) {
+			WPMCP_Errors::fail(
+				WPMCP_Errors::MISSING_ARGUMENT,
+				'Nothing to write.',
+				'Give at least one of title_template, description_template or focus_keyword_template.',
+				[ 'accepted' => [ 'title_template', 'description_template', 'focus_keyword_template' ] ]
+			);
+		}
+
+		$dry     = ! isset( $args['dry_run'] ) || WPMCP_Util::bool( $args['dry_run'], true );
+		$missing = ! isset( $args['only_missing'] ) || WPMCP_Util::bool( $args['only_missing'], true );
+		$limit   = min( max( 1, (int) ( $args['limit'] ?? 100 ) ), 1000 );
+		$offset  = max( 0, (int) ( $args['offset'] ?? 0 ) );
+		$sep     = (string) ( $args['separator'] ?? '|' );
+
+		$ids = array_values( array_filter( array_map( 'intval', WPMCP_Util::to_array( $args['ids'] ?? [] ) ) ) );
+		if ( $ids ) {
+			$posts = array_slice( $ids, $offset, $limit );
+			$total = count( $ids );
+		} else {
+			$q     = new WP_Query(
+				[
+					'post_type'              => (string) ( $args['post_type'] ?? 'post' ),
+					'post_status'            => 'publish',
+					'posts_per_page'         => $limit,
+					'offset'                 => $offset,
+					'fields'                 => 'ids',
+					'orderby'                => 'ID',
+					'order'                  => 'ASC',
+					'update_post_term_cache' => false,
+				]
+			);
+			$posts = $q->posts;
+			$total = (int) $q->found_posts;
+		}
+
+		$changes = [];
+		$written = 0;
+		$skipped = 0;
+
+		foreach ( $posts as $pid ) {
+			$pid     = (int) $pid;
+			$current = WPMCP_SEO::get_post_seo( $pid );
+			$fields  = [];
+			$preview = [];
+
+			foreach ( $templates as $field => $template ) {
+				if ( $missing && '' !== (string) $current[ $field ] ) {
+					continue;
+				}
+				$value = $this->render_seo_template( $template, $pid, $sep );
+				if ( '' === $value ) {
+					continue;
+				}
+				$fields[ $field ] = $value;
+				$measure          = in_array( $field, [ 'title', 'description' ], true )
+					? $this->measure_serp_text( $value, $field, 'desktop' )
+					: null;
+				$preview[ $field ] = $measure ? array_merge( [ 'value' => $value ], $measure ) : [ 'value' => $value ];
+			}
+
+			if ( ! $fields ) {
+				$skipped++;
+				continue;
+			}
+			$changes[] = [
+				'id'     => $pid,
+				'title'  => get_the_title( $pid ),
+				'fields' => $preview,
+			];
+			if ( ! $dry ) {
+				WPMCP_Journal::post_seo( $pid );
+				WPMCP_SEO::set_post_seo( $pid, $fields );
+				$written++;
+			}
+		}
+
+		$next     = $offset + count( $posts );
+		$truncated = [];
+		foreach ( $changes as $change ) {
+			foreach ( $change['fields'] as $field => $data ) {
+				if ( ! empty( $data['truncated'] ) ) {
+					$truncated[] = [ 'id' => $change['id'], 'field' => $field ];
+				}
+			}
+		}
+
+		return [
+			'dry_run'        => $dry,
+			'matched'        => count( $changes ),
+			'written'        => $written,
+			'skipped'        => $skipped,
+			'total'          => $total,
+			'changes'        => $changes,
+			'over_width'     => $truncated,
+			'next_offset'    => $next < $total ? $next : null,
+			'next_step'      => $dry
+				? 'Dry run — nothing was written. Anything listed in over_width will be cut off in the SERP; shorten the template, then call again with dry_run=false.'
+				: ( $next < $total ? sprintf( 'Call again with offset=%d for the next batch.', $next ) : 'All matching posts have been written.' ),
+		];
+	}
+
+	/**
+	 * Fill an SEO template for one post.
+	 *
+	 * @param string $template  Template string.
+	 * @param int    $post_id   Post ID.
+	 * @param string $separator What {separator} renders as.
+	 * @return string
+	 */
+	private function render_seo_template( $template, $post_id, $separator ) {
+		$post = get_post( $post_id );
+		if ( ! $post ) {
+			return '';
+		}
+
+		$category = '';
+		$taxonomy = 'product' === $post->post_type ? 'product_cat' : 'category';
+		$terms    = get_the_terms( $post_id, $taxonomy );
+		if ( $terms && ! is_wp_error( $terms ) ) {
+			$category = $terms[0]->name;
+		}
+
+		$sku    = '';
+		$price  = '';
+		$brand  = '';
+		if ( 'product' === $post->post_type && function_exists( 'wc_get_product' ) ) {
+			$product = wc_get_product( $post_id );
+			if ( $product ) {
+				$sku   = $product->get_sku();
+				$price = wp_strip_all_tags( (string) $product->get_price_html() );
+				foreach ( [ 'pa_brand', 'product_brand', 'pwb-brand' ] as $brand_tax ) {
+					$brand_terms = get_the_terms( $post_id, $brand_tax );
+					if ( $brand_terms && ! is_wp_error( $brand_terms ) ) {
+						$brand = $brand_terms[0]->name;
+						break;
+					}
+				}
+			}
+		}
+
+		$excerpt = $post->post_excerpt;
+		if ( '' === trim( (string) $excerpt ) ) {
+			$excerpt = wp_trim_words( wp_strip_all_tags( strip_shortcodes( $post->post_content ) ), 30, '' );
+		}
+
+		$value = strtr(
+			$template,
+			[
+				'{title}'     => get_the_title( $post_id ),
+				'{excerpt}'   => wp_strip_all_tags( (string) $excerpt ),
+				'{site}'      => get_bloginfo( 'name' ),
+				'{tagline}'   => get_bloginfo( 'description' ),
+				'{category}'  => $category,
+				'{sku}'       => $sku,
+				'{price}'     => $price,
+				'{brand}'     => $brand,
+				'{separator}' => $separator,
+			]
+		);
+
+		// An empty placeholder leaves a dangling separator; tidy it up.
+		$quoted = preg_quote( $separator, '/' );
+		$value  = preg_replace( '/(\s*' . $quoted . '\s*){2,}/u', ' ' . $separator . ' ', $value );
+		$value  = trim( preg_replace( '/\s+/u', ' ', $value ) );
+		$value  = trim( $value, " \t\n" . $separator );
+
+		return sanitize_text_field( trim( $value ) );
+	}
+
+	/**
+	 * @param array $args Args.
+	 * @return array
+	 */
+	private function tool_serp_preview( $args ) {
+		$device = 'mobile' === strtolower( (string) ( $args['device'] ?? '' ) ) ? 'mobile' : 'desktop';
+
+		$ids = array_values( array_filter( array_map( 'intval', WPMCP_Util::to_array( $args['ids'] ?? [] ) ) ) );
+		if ( ! empty( $args['id'] ) ) {
+			$ids[] = (int) $args['id'];
+		}
+		$ids = array_values( array_unique( $ids ) );
+
+		$results = [];
+
+		if ( ! $ids ) {
+			$title = (string) ( $args['title'] ?? '' );
+			$desc  = (string) ( $args['description'] ?? '' );
+			if ( '' === $title && '' === $desc ) {
+				WPMCP_Errors::fail(
+					WPMCP_Errors::MISSING_ARGUMENT,
+					'Nothing to preview.',
+					'Pass id or ids to preview real posts, or title / description to measure draft text.'
+				);
+			}
+			$results[] = [
+				'title'       => '' !== $title ? array_merge( [ 'value' => $title ], $this->measure_serp_text( $title, 'title', $device ) ) : null,
+				'description' => '' !== $desc ? array_merge( [ 'value' => $desc ], $this->measure_serp_text( $desc, 'description', $device ) ) : null,
+			];
+		}
+
+		foreach ( array_slice( $ids, 0, 50 ) as $pid ) {
+			$post = get_post( $pid );
+			if ( ! $post ) {
+				$results[] = [ 'id' => $pid, 'error' => 'Post not found.' ];
+				continue;
+			}
+			$seo   = WPMCP_SEO::get_post_seo( $pid );
+			// Google falls back to the post title and an excerpt when the SEO
+			// fields are empty, so preview what will really be shown.
+			$title = '' !== $seo['title'] ? $seo['title'] : get_the_title( $pid );
+			$desc  = $seo['description'];
+			$from  = '' !== $seo['description'] ? 'meta description' : 'auto-generated by the search engine';
+			if ( '' === $desc ) {
+				$desc = wp_trim_words( wp_strip_all_tags( strip_shortcodes( $post->post_content ) ), 30, '' );
+			}
+
+			$results[] = [
+				'id'            => $pid,
+				'url'           => get_permalink( $pid ),
+				'breadcrumb'    => str_replace( [ 'https://', 'http://' ], '', trailingslashit( get_permalink( $pid ) ) ),
+				'title'         => array_merge( [ 'value' => $title, 'source' => '' !== $seo['title'] ? 'SEO title' : 'post title' ], $this->measure_serp_text( $title, 'title', $device ) ),
+				'description'   => array_merge( [ 'value' => $desc, 'source' => $from ], $this->measure_serp_text( $desc, 'description', $device ) ),
+				'noindex'       => (bool) $seo['noindex'],
+				'focus_keyword' => $seo['focus_keyword'],
+			];
+		}
+
+		return [
+			'device'    => $device,
+			'limits'    => $this->serp_limits( $device ),
+			'previews'  => $results,
+			'note'      => 'Widths are estimated from Google\'s rendering font (Arial 20px titles, 14px descriptions). Treat them as close, not exact — Google also rewrites titles and descriptions at its own discretion.',
+		];
+	}
+
+	/**
+	 * Pixel budgets Google renders within.
+	 *
+	 * @param string $device desktop|mobile.
+	 * @return array
+	 */
+	private function serp_limits( $device ) {
+		return 'mobile' === $device
+			? [ 'title_px' => 490, 'description_px' => 780 ]
+			: [ 'title_px' => 580, 'description_px' => 920 ];
+	}
+
+	/**
+	 * Measure a piece of SERP text and say where it will be cut.
+	 *
+	 * Character counts are a poor proxy: an "i" is a third the width of an "m",
+	 * so a 60-character title of capitals overflows while 70 lowercase
+	 * characters fit. This estimates the rendered width instead.
+	 *
+	 * @param string $text   The text.
+	 * @param string $field  title|description.
+	 * @param string $device desktop|mobile.
+	 * @return array
+	 */
+	private function measure_serp_text( $text, $field, $device ) {
+		$limits = $this->serp_limits( $device );
+		$budget = 'title' === $field ? $limits['title_px'] : $limits['description_px'];
+		$size   = 'title' === $field ? 20 : 14;
+
+		$width    = 0.0;
+		$cut_at   = null;
+		$chars    = preg_split( '//u', $text, -1, PREG_SPLIT_NO_EMPTY );
+		$chars    = is_array( $chars ) ? $chars : [];
+		foreach ( $chars as $index => $char ) {
+			$width += $this->char_width( $char ) * $size;
+			if ( null === $cut_at && $width > $budget ) {
+				$cut_at = $index;
+			}
+		}
+
+		return [
+			'characters'   => count( $chars ),
+			'pixels'       => (int) round( $width ),
+			'pixel_budget' => $budget,
+			'truncated'    => null !== $cut_at,
+			'displayed'    => null !== $cut_at ? rtrim( join( '', array_slice( $chars, 0, max( 0, $cut_at - 1 ) ) ) ) . '…' : $text,
+			'advice'       => null !== $cut_at
+				? sprintf( 'Over budget by about %dpx — trim roughly %d characters.', (int) round( $width - $budget ), max( 1, count( $chars ) - $cut_at ) )
+				: ( $width < $budget * 0.6 ? 'Well under the limit; there is room to say more.' : 'Fits.' ),
+		];
+	}
+
+	/**
+	 * Approximate width of one character, as a fraction of the font size, in
+	 * the Arial-like face Google renders SERP text in.
+	 *
+	 * @param string $char Single character.
+	 * @return float
+	 */
+	private function char_width( $char ) {
+		if ( ' ' === $char ) {
+			return 0.28;
+		}
+		if ( false !== strpos( 'ijltI.,;:!|\'`[]()', $char ) ) {
+			return 0.28;
+		}
+		if ( false !== strpos( 'fr', $char ) ) {
+			return 0.34;
+		}
+		if ( false !== strpos( 'mwMW@', $char ) ) {
+			return 0.85;
+		}
+		if ( ctype_upper( $char ) ) {
+			return 0.68;
+		}
+		if ( ctype_digit( $char ) ) {
+			return 0.56;
+		}
+		if ( ! ctype_print( $char ) ) {
+			// Non-Latin scripts are typically full-width in this context.
+			return 1.0;
+		}
+		return 0.52;
+	}
+
+	/**
 	 * Build (and optionally apply) JSON-LD for a post.
 	 *
 	 * @param array $args Args.
 	 * @return array
 	 */
 	private function tool_generate_schema( $args ) {
+		$warnings = [];
 		$id    = (int) $args['id'];
 		$p     = WPMCP_Validator::require_post( $id );
 		$type  = $args['type'] ?? 'Article';
@@ -2103,6 +2438,15 @@ trait WPMCP_Content_Tools {
 				break;
 
 			case 'Product':
+				// For a real WooCommerce product, build the complete object —
+				// identifiers, brand, variants, price validity, shipping and
+				// returns — not the bare name/price pair Google now warns about.
+				if ( function_exists( 'wc_get_product' ) && wc_get_product( $id ) ) {
+					$built    = WPMCP_Schema::product( $id, [] );
+					$schema   = $built['schema'];
+					$warnings = $built['warnings'];
+					break;
+				}
 				$schema = [
 					'@context'    => 'https://schema.org',
 					'@type'       => 'Product',
@@ -2112,28 +2456,6 @@ trait WPMCP_Content_Tools {
 				];
 				if ( $image ) {
 					$schema['image'] = $image;
-				}
-				if ( function_exists( 'wc_get_product' ) ) {
-					$product = wc_get_product( $id );
-					if ( $product ) {
-						$schema['offers'] = [
-							'@type'         => 'Offer',
-							'price'         => $product->get_price(),
-							'priceCurrency' => get_option( 'woocommerce_currency', 'USD' ),
-							'availability'  => 'instock' === $product->get_stock_status() ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock',
-							'url'           => $url,
-						];
-						if ( $product->get_sku() ) {
-							$schema['sku'] = $product->get_sku();
-						}
-						if ( $product->get_review_count() ) {
-							$schema['aggregateRating'] = [
-								'@type'       => 'AggregateRating',
-								'ratingValue' => $product->get_average_rating(),
-								'reviewCount' => $product->get_review_count(),
-							];
-						}
-					}
 				}
 				break;
 
@@ -2164,11 +2486,21 @@ trait WPMCP_Content_Tools {
 			if ( false === $json ) {
 				WPMCP_Errors::fail( WPMCP_Errors::TOOL_FAILED, 'The generated schema could not be encoded to JSON.' );
 			}
+			WPMCP_Journal::post_meta( $id, WPMCP_Frontend::JSONLD_META );
 			update_post_meta( $id, WPMCP_Frontend::JSONLD_META, wp_slash( $json ) );
 			$applied = true;
 		}
 
-		return [ 'id' => $id, 'type' => $type, 'applied' => $applied, 'schema' => $schema ];
+		return [
+			'id'        => $id,
+			'type'      => $type,
+			'applied'   => $applied,
+			'schema'    => $schema,
+			'warnings'  => $warnings,
+			'next_step' => $warnings
+				? 'The schema is valid but incomplete — see warnings. For products, generate_product_schema takes the missing policy facts as arguments.'
+				: ( $applied ? 'Written. Validate it with Google\'s Rich Results Test.' : 'Call again with apply=true to store it on the post.' ),
+		];
 	}
 
 	/**

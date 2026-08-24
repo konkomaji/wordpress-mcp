@@ -3,6 +3,8 @@
  * Front-end output for AEO / GEO features that the MCP client manages:
  *   - Custom JSON-LD structured data per post (stored in _wpmcp_jsonld meta).
  *   - A site-wide llms.txt served at /llms.txt for generative engines.
+ *   - The IndexNow verification key file, so instant-indexing submissions
+ *     can be proven to come from the site that owns the URLs.
  *
  * @package WordPressMCP
  */
@@ -20,15 +22,17 @@ class WPMCP_Frontend {
 	const LLMS_OPTION     = 'wpmcp_llms_txt';
 	const ROBOTS_OPTION   = 'wpmcp_robots_extra';
 	const REDIRECT_OPTION = 'wpmcp_redirects';
+	const INDEXNOW_OPTION = 'wpmcp_indexnow_key';
 
 	/**
 	 * Wire up hooks.
 	 */
 	public function register() {
 		add_action( 'wp_head', [ $this, 'output_jsonld' ], 20 );
-		add_action( 'init', [ $this, 'add_llms_rewrite' ] );
+		add_action( 'init', [ $this, 'add_rewrites' ] );
 		add_filter( 'query_vars', [ $this, 'add_query_var' ] );
 		add_action( 'template_redirect', [ $this, 'maybe_serve_llms' ] );
+		add_action( 'template_redirect', [ $this, 'maybe_serve_indexnow_key' ] );
 		// SEO/GEO: extra robots.txt directives (e.g. AI-crawler rules).
 		add_filter( 'robots_txt', [ $this, 'filter_robots_txt' ], 20 );
 		// SEO: managed 301 redirects, evaluated before the main query renders.
@@ -125,10 +129,20 @@ class WPMCP_Frontend {
 	}
 
 	/**
-	 * Register the llms.txt rewrite rule.
+	 * Register the rewrite rules for the flat files this plugin serves.
+	 */
+	public function add_rewrites() {
+		add_rewrite_rule( '^llms\.txt$', 'index.php?wpmcp_llms=1', 'top' );
+		// IndexNow requires the key to be readable at /<key>.txt on the same
+		// host as the URLs being submitted.
+		add_rewrite_rule( '^([a-f0-9]{32})\.txt$', 'index.php?wpmcp_indexnow=$matches[1]', 'top' );
+	}
+
+	/**
+	 * Backwards-compatible alias for the rewrite registration.
 	 */
 	public function add_llms_rewrite() {
-		add_rewrite_rule( '^llms\.txt$', 'index.php?wpmcp_llms=1', 'top' );
+		$this->add_rewrites();
 	}
 
 	/**
@@ -139,7 +153,27 @@ class WPMCP_Frontend {
 	 */
 	public function add_query_var( $vars ) {
 		$vars[] = 'wpmcp_llms';
+		$vars[] = 'wpmcp_indexnow';
 		return $vars;
+	}
+
+	/**
+	 * Serve the IndexNow key file when the requested name matches the stored
+	 * key. Any other 32-character name falls through to a normal 404.
+	 */
+	public function maybe_serve_indexnow_key() {
+		$requested = (string) get_query_var( 'wpmcp_indexnow' );
+		if ( '' === $requested ) {
+			return;
+		}
+		$key = (string) get_option( self::INDEXNOW_OPTION, '' );
+		if ( '' === $key || ! hash_equals( $key, $requested ) ) {
+			return;
+		}
+		header( 'Content-Type: text/plain; charset=utf-8' );
+		status_header( 200 );
+		echo esc_html( $key );
+		exit;
 	}
 
 	/**
@@ -166,7 +200,7 @@ class WPMCP_Frontend {
 	 */
 	public static function flush() {
 		$instance = new self();
-		$instance->add_llms_rewrite();
+		$instance->add_rewrites();
 		flush_rewrite_rules();
 	}
 }

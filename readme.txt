@@ -5,7 +5,7 @@ Tags: mcp, seo, ai, claude, woocommerce
 Requires at least: 5.6
 Tested up to: 6.5
 Requires PHP: 7.4
-Stable tag: 1.3.0
+Stable tag: 1.4.0
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -72,6 +72,26 @@ No. The plugin is a server — Claude connects in. Site Kit data, when used, is 
 
 == Changelog ==
 
+= 1.4.0 =
+* New get_image_bytes: returns a library image as an inline picture so it can be looked at before alt text, captions or product copy are written, and so the right photo can be confirmed on the right product.
+* Undo: every instrumented write now records what it overwrites. Tools return an operation_id, undo_operation reverses the whole change, list_operations shows the last 40, and create_restore_point snapshots a set of posts before a risky run.
+* New batch tool: up to 50 tool calls in one request, each with its own result or error, reversible as a single operation.
+* New find_broken_links: crawls links and images in content, resolves internal links against the database, requests the rest over HTTP, reports redirects separately from failures, caches results for six hours and resumes where it stopped.
+* New sitemap tools: get_sitemap reads the sitemap from core, Yoast or Rank Math and follows an index into its children; sitemap_audit reports noindexed URLs in the sitemap, published content missing from it, URLs that 404 or redirect, and stale lastmod dates.
+* New indexnow_submit: instant indexing for Bing, Yandex, Naver and Seznam, with the verification key generated and served automatically at /<key>.txt.
+* New get_audit_log: every tool call with redacted arguments, status, duration, requesting IP and the operation that would undo it.
+* New get_progress, plus a time budget: long sweeps report how far they have got and stop before the PHP execution limit, returning a resume offset instead of being killed mid-write.
+* Media ingest: one shared engine behind upload_media, manage_product_images and variation images. Images can come from an attachment ID, a URL, base64 bytes (data URIs accepted) or a path on the server. Files are renamed after the product for image SEO, de-duplicated by content hash, and optionally downscaled or converted to WebP/AVIF before they reach the library.
+* manage_product_images rewritten: gallery mode (replace/append/prepend), remove_ids, reorder, detach_main, per-image title/caption/description, automatic alt text, and per-source error reporting so one bad URL no longer loses the batch. The old image_id / image_url / gallery_ids / gallery_urls / alt / gallery_alts arguments still work.
+* New bulk_assign_variation_images: map an attribute value to an image and every matching variation gets it, ingested once and shared. save_product_variation now accepts a full image source, not just an attachment ID.
+* New media tools: optimize_image (downscale, convert, re-encode, with a restorable original and optional URL rewriting), restore_image, regenerate_thumbnails, find_duplicate_media, find_unused_media, bulk_set_image_alt.
+* SEO: set_seo and get_seo gain og_image and twitter_image. Either an attachment ID or a URL is accepted and both the URL and the attachment ID the SEO plugin needs are written.
+* New generate_product_schema: Merchant-grade Product structured data with gtin/mpn/sku, brand, priceValidUntil, shippingDetails, hasMerchantReturnPolicy, itemCondition, colour/size/material and embedded reviews. Variable products become a ProductGroup with every variation as a hasVariant offer. Shipping and returns policy can be saved once and reused. generate_schema type=Product routes here automatically.
+* New product_seo_fix: bulk repair of missing SEO titles, meta descriptions, image alt text and schema, written from the product's own facts and trimmed to the pixel width Google renders. Dry run by default.
+* New bulk_set_seo and serp_preview: template-driven SEO titles and descriptions across any post type, and a pixel-accurate SERP preview showing where each one is truncated.
+* product_seo_audit now also reports duplicated product descriptions and missing social images.
+* 162 tools total.
+
 = 1.3.0 =
 * Page builders: new group with detect_page_builder, get_page_structure, edit_page_element, insert_page_section, delete_page_element, list_builder_templates, manage_global_styles and render_page_preview. Full read/write for Elementor and Gutenberg blocks, text and attribute editing for Divi and WPBakery, read support for Beaver Builder, Oxygen, Bricks, Breakdance and SiteOrigin.
 * WooCommerce: complete catalogue management — create/update/delete/duplicate products of any type with the full field set, variations (including generate_product_variations), global attributes, categories with images and SEO, product image and gallery management, bulk repricing and scheduled sales, inventory control, an inventory report, coupons, store settings, and sales reporting.
@@ -102,6 +122,9 @@ No. The plugin is a server — Claude connects in. Site Kit data, when used, is 
 * Initial release. JSON-RPC MCP endpoint, ~46 tools, engine-agnostic SEO, WooCommerce, Google Site Kit, JSON-LD, llms.txt, capability groups, Material 3 admin UI.
 
 == Upgrade Notice ==
+
+= 1.4.0 =
+The agent can see images, every change can be undone, and 50 calls fit in one request. Adds broken-link checking, sitemap auditing, IndexNow, an audit log, live progress and a time budget for long runs. Proper product image handling: upload from an ID, URL, base64 or server path, with SEO filenames, de-duplication, WebP conversion and full gallery control. Adds media-library optimisation and clean-up tools, social-image SEO fields, Merchant-grade Product schema, and bulk repair of product SEO. 162 tools.
 
 = 1.3.0 =
 Major release. Page-builder aware editing (Elementor, Gutenberg, Divi, WPBakery), complete WooCommerce store operations including orders and refunds, a site-speed audit and optimiser, menus and widgets, and a structured error-handling system with syntax-checked file writes and automatic backups. 140 tools.

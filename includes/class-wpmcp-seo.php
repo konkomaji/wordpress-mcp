@@ -6,7 +6,8 @@
  *
  * Normalised SEO fields:
  *   title, description, focus_keyword, canonical, noindex (bool),
- *   nofollow (bool), og_title, og_description, twitter_title, twitter_description
+ *   nofollow (bool), og_title, og_description, og_image, twitter_title,
+ *   twitter_description, twitter_image
  *
  * @package WordPressMCP
  */
@@ -77,6 +78,10 @@ class WPMCP_SEO {
 				'og_description'      => (string) get_post_meta( $post_id, 'rank_math_facebook_description', true ),
 				'twitter_title'       => (string) get_post_meta( $post_id, 'rank_math_twitter_title', true ),
 				'twitter_description' => (string) get_post_meta( $post_id, 'rank_math_twitter_description', true ),
+				'og_image'            => (string) get_post_meta( $post_id, 'rank_math_facebook_image', true ),
+				'og_image_id'         => (int) get_post_meta( $post_id, 'rank_math_facebook_image_id', true ),
+				'twitter_image'       => (string) get_post_meta( $post_id, 'rank_math_twitter_image', true ),
+				'twitter_image_id'    => (int) get_post_meta( $post_id, 'rank_math_twitter_image_id', true ),
 			];
 		}
 
@@ -94,6 +99,10 @@ class WPMCP_SEO {
 			'og_description'      => (string) get_post_meta( $post_id, '_yoast_wpseo_opengraph-description', true ),
 			'twitter_title'       => (string) get_post_meta( $post_id, '_yoast_wpseo_twitter-title', true ),
 			'twitter_description' => (string) get_post_meta( $post_id, '_yoast_wpseo_twitter-description', true ),
+			'og_image'            => (string) get_post_meta( $post_id, '_yoast_wpseo_opengraph-image', true ),
+			'og_image_id'         => (int) get_post_meta( $post_id, '_yoast_wpseo_opengraph-image-id', true ),
+			'twitter_image'       => (string) get_post_meta( $post_id, '_yoast_wpseo_twitter-image', true ),
+			'twitter_image_id'    => (int) get_post_meta( $post_id, '_yoast_wpseo_twitter-image-id', true ),
 		];
 	}
 
@@ -107,6 +116,7 @@ class WPMCP_SEO {
 	public static function set_post_seo( $post_id, $fields ) {
 		$post_id  = (int) $post_id;
 		$provider = self::provider();
+		$fields   = self::normalise_image_fields( $fields );
 
 		if ( 'rankmath' === $provider ) {
 			$map = [
@@ -124,6 +134,8 @@ class WPMCP_SEO {
 					update_post_meta( $post_id, $meta_key, sanitize_text_field( $fields[ $field ] ) );
 				}
 			}
+			self::write_image_field( $post_id, $fields, 'og_image', 'rank_math_facebook_image', 'rank_math_facebook_image_id' );
+			self::write_image_field( $post_id, $fields, 'twitter_image', 'rank_math_twitter_image', 'rank_math_twitter_image_id' );
 			if ( array_key_exists( 'noindex', $fields ) || array_key_exists( 'nofollow', $fields ) ) {
 				$robots = get_post_meta( $post_id, 'rank_math_robots', true );
 				$robots = is_array( $robots ) ? $robots : [];
@@ -150,6 +162,8 @@ class WPMCP_SEO {
 					update_post_meta( $post_id, $meta_key, sanitize_text_field( $fields[ $field ] ) );
 				}
 			}
+			self::write_image_field( $post_id, $fields, 'og_image', '_yoast_wpseo_opengraph-image', '_yoast_wpseo_opengraph-image-id' );
+			self::write_image_field( $post_id, $fields, 'twitter_image', '_yoast_wpseo_twitter-image', '_yoast_wpseo_twitter-image-id' );
 			if ( array_key_exists( 'noindex', $fields ) ) {
 				update_post_meta( $post_id, '_yoast_wpseo_meta-robots-noindex', ! empty( $fields['noindex'] ) ? '1' : '2' );
 			}
@@ -235,6 +249,80 @@ class WPMCP_SEO {
 		}
 		update_option( 'wpseo_taxonomy_meta', $meta );
 		return self::get_term_seo( $term_id, $taxonomy );
+	}
+
+	/**
+	 * Accept a social image as an attachment ID, an ID-carrying field, or a
+	 * URL, and end up with both the URL and the ID either way. Both Yoast and
+	 * Rank Math want the pair, and only having one of them is what makes a
+	 * social image silently fail to render.
+	 *
+	 * @param array $fields Incoming normalised fields.
+	 * @return array
+	 */
+	private static function normalise_image_fields( $fields ) {
+		foreach ( [ 'og_image', 'twitter_image' ] as $field ) {
+			$id_field = $field . '_id';
+
+			if ( array_key_exists( $id_field, $fields ) && ! array_key_exists( $field, $fields ) ) {
+				$url = wp_get_attachment_url( (int) $fields[ $id_field ] );
+				if ( $url ) {
+					$fields[ $field ] = $url;
+				}
+				continue;
+			}
+			if ( ! array_key_exists( $field, $fields ) ) {
+				continue;
+			}
+
+			$value = $fields[ $field ];
+			// A bare number means "use this attachment".
+			if ( is_numeric( $value ) ) {
+				$id  = (int) $value;
+				$url = wp_get_attachment_url( $id );
+				if ( $url ) {
+					$fields[ $field ]    = $url;
+					$fields[ $id_field ] = $id;
+				}
+				continue;
+			}
+			if ( ! array_key_exists( $id_field, $fields ) && is_string( $value ) && '' !== $value ) {
+				$id = attachment_url_to_postid( $value );
+				if ( $id ) {
+					$fields[ $id_field ] = $id;
+				}
+			}
+		}
+		return $fields;
+	}
+
+	/**
+	 * Write one social image URL and its attachment ID.
+	 *
+	 * @param int    $post_id  Post ID.
+	 * @param array  $fields   Normalised fields.
+	 * @param string $field    Field name (og_image|twitter_image).
+	 * @param string $url_key  Provider meta key for the URL.
+	 * @param string $id_key   Provider meta key for the attachment ID.
+	 */
+	private static function write_image_field( $post_id, $fields, $field, $url_key, $id_key ) {
+		if ( array_key_exists( $field, $fields ) ) {
+			$url = (string) $fields[ $field ];
+			if ( '' === $url ) {
+				delete_post_meta( $post_id, $url_key );
+				delete_post_meta( $post_id, $id_key );
+				return;
+			}
+			update_post_meta( $post_id, $url_key, esc_url_raw( $url ) );
+		}
+		if ( array_key_exists( $field . '_id', $fields ) ) {
+			$id = (int) $fields[ $field . '_id' ];
+			if ( $id ) {
+				update_post_meta( $post_id, $id_key, $id );
+			} else {
+				delete_post_meta( $post_id, $id_key );
+			}
+		}
 	}
 
 	/**

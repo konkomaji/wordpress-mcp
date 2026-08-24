@@ -105,6 +105,13 @@ class WPMCP_Errors {
 	const LOG_LIMIT = 30;
 
 	/**
+	 * Nested tool names, innermost last. Non-empty whenever a tool is running.
+	 *
+	 * @var array<int,string>
+	 */
+	private static $stack = [];
+
+	/**
 	 * Warnings/notices raised inside the current tool call.
 	 *
 	 * @var array
@@ -168,12 +175,16 @@ class WPMCP_Errors {
 	 * @param string $tool Tool name.
 	 */
 	public static function begin( $tool ) {
-		self::$captured     = [];
+		// batch runs tools inside a tool. Keep a stack so the inner call does
+		// not clear the outer call's captured warnings or hand the error
+		// handler back while the outer one is still running.
+		self::$stack[]      = (string) $tool;
 		self::$current_tool = (string) $tool;
 
 		if ( self::$capturing ) {
 			return;
 		}
+		self::$captured = [];
 		self::$capturing = true;
 		set_error_handler( // phpcs:ignore WordPress.PHP.DevelopmentFunctions.prevent_path_disclosure_set_error_handler
 			function ( $errno, $errstr, $errfile = '', $errline = 0 ) {
@@ -201,13 +212,19 @@ class WPMCP_Errors {
 	 * @return array
 	 */
 	public static function end() {
+		array_pop( self::$stack );
+		self::$current_tool = self::$stack ? end( self::$stack ) : '';
+
+		if ( self::$stack ) {
+			// An inner call finished; the outer one keeps collecting.
+			return [];
+		}
 		if ( self::$capturing ) {
 			restore_error_handler();
 			self::$capturing = false;
 		}
-		self::$current_tool = '';
-		$captured           = self::$captured;
-		self::$captured     = [];
+		$captured       = self::$captured;
+		self::$captured = [];
 		return $captured;
 	}
 

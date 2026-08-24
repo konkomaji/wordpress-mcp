@@ -172,11 +172,31 @@ trait WPMCP_WooCommerce_Tools {
 						'width'          => [ 'type' => 'string' ],
 						'height'         => [ 'type' => 'string' ],
 						'shipping_class' => [ 'type' => 'string', 'description' => 'Shipping class slug.' ],
-						'image_id'       => [ 'type' => 'integer' ],
+						'image_id'       => [ 'type' => 'integer', 'description' => 'Existing attachment ID for the variation image.' ],
+						'image'          => [ 'type' => 'object', 'description' => 'Variation image from a fresh source. Keys: id | url | base64 | path, plus filename, alt, title, caption. Downloaded, deduplicated and named after the variation.' ],
 						'description'    => [ 'type' => 'string' ],
 						'enabled'        => [ 'type' => 'boolean' ],
 					],
 					'required'   => [ 'product_id' ],
+				],
+			],
+			[
+				'group'       => 'woocommerce',
+				'name'        => 'bulk_assign_variation_images',
+				'description' => 'Give every variation of a variable product its own image in one call, by mapping an attribute value to an image. Send { "red": "https://.../red.jpg", "blue": { "base64": "...", "filename": "blue.jpg" } } and every variation whose colour is red gets the red photo. Each image is ingested once and reused across matching variations. Dry run by default.',
+				'inputSchema' => [
+					'type'       => 'object',
+					'properties' => [
+						'product_id'    => [ 'type' => 'integer' ],
+						'attribute'     => [ 'type' => 'string', 'description' => 'Attribute to match on, e.g. "pa_color" or "Color". Omit when the product has a single attribute.' ],
+						'images'        => [ 'type' => 'object', 'description' => 'Map of attribute value (slug or label) => image source. Each value is a URL string, an attachment ID, or an object with id | url | base64 | path.' ],
+						'add_to_gallery'=> [ 'type' => 'boolean', 'description' => 'Also append each ingested image to the parent product gallery. Default false.' ],
+						'overwrite'     => [ 'type' => 'boolean', 'description' => 'Replace images on variations that already have one. Default false.' ],
+						'max_dimension' => [ 'type' => 'integer', 'description' => 'Downscale incoming images. Default 2000.' ],
+						'convert'       => [ 'type' => 'string', 'description' => 'webp | avif | jpg | png. Omit to keep the source format.' ],
+						'dry_run'       => [ 'type' => 'boolean', 'description' => 'Default TRUE. Set false to apply.' ],
+					],
+					'required'   => [ 'product_id', 'images' ],
 				],
 			],
 			[
@@ -275,17 +295,30 @@ trait WPMCP_WooCommerce_Tools {
 			[
 				'group'       => 'woocommerce',
 				'name'        => 'manage_product_images',
-				'description' => 'Set a product\'s main image and gallery from attachment IDs or by downloading source URLs, and optionally write alt text on each — the fastest route from "product has no images" to a complete, SEO-ready gallery.',
+				'description' => 'Set a product\'s main image and gallery. Each image can come from an existing attachment ID, a URL the server downloads, raw base64 bytes, or a file already on the server. Renames files after the product for image SEO, writes alt/title/caption, skips bytes the library already holds, and can downscale or convert to WebP on the way in. Gallery order is what you send. One bad source does not lose the rest.',
 				'inputSchema' => [
 					'type'       => 'object',
 					'properties' => [
-						'product_id'   => [ 'type' => 'integer' ],
-						'image_id'     => [ 'type' => 'integer', 'description' => 'Attachment ID for the main image.' ],
-						'image_url'    => [ 'type' => 'string', 'description' => 'Download this URL and use it as the main image.' ],
-						'gallery_ids'  => [ 'type' => 'array', 'description' => 'Attachment IDs for the gallery (replaces it).' ],
-						'gallery_urls' => [ 'type' => 'array', 'description' => 'URLs to download and append to the gallery.' ],
-						'alt'          => [ 'type' => 'string', 'description' => 'Alt text applied to the main image.' ],
-						'gallery_alts' => [ 'type' => 'array', 'description' => 'Alt text per gallery image, in order.' ],
+						'product_id'        => [ 'type' => 'integer' ],
+						'main'              => [ 'type' => 'object', 'description' => 'Main product image. Keys: id | url | base64 | path, plus filename, alt, title, caption, description.' ],
+						'gallery'           => [ 'type' => 'array', 'description' => 'Gallery images, in the order they should appear. Each item is either an attachment ID, a URL string, or the same object shape as main.' ],
+						'mode'              => [ 'type' => 'string', 'description' => 'How gallery combines with what is already there: replace (default), append, or prepend.' ],
+						'remove_ids'        => [ 'type' => 'array', 'description' => 'Attachment IDs to drop from the gallery.' ],
+						'reorder'           => [ 'type' => 'array', 'description' => 'Attachment IDs in the exact order wanted. Applied after everything else.' ],
+						'detach_main'       => [ 'type' => 'boolean', 'description' => 'Remove the main image entirely.' ],
+						'seo_filenames'     => [ 'type' => 'boolean', 'description' => 'Rename incoming files after the product, e.g. black-cotton-hoodie-2.jpg. Default true.' ],
+						'auto_alt'          => [ 'type' => 'boolean', 'description' => 'Fill any missing alt text with the product name. Default true.' ],
+						'dedup'             => [ 'type' => 'boolean', 'description' => 'Reuse an existing attachment when the bytes are identical. Default true.' ],
+						'max_dimension'     => [ 'type' => 'integer', 'description' => 'Downscale incoming images so neither side exceeds this. Default 2000. Pass 0 to keep full size.' ],
+						'convert'           => [ 'type' => 'string', 'description' => 'Convert incoming images: webp | avif | jpg | png. Omit to keep the source format.' ],
+						'quality'           => [ 'type' => 'integer', 'description' => 'Encoder quality 1-100 when resizing or converting. Default 82.' ],
+						'continue_on_error' => [ 'type' => 'boolean', 'description' => 'Keep going when one source fails and report it. Default true.' ],
+						'image_id'          => [ 'type' => 'integer', 'description' => 'Legacy: attachment ID for the main image.' ],
+						'image_url'         => [ 'type' => 'string', 'description' => 'Legacy: URL for the main image.' ],
+						'gallery_ids'       => [ 'type' => 'array', 'description' => 'Legacy: attachment IDs, replacing the gallery.' ],
+						'gallery_urls'      => [ 'type' => 'array', 'description' => 'Legacy: URLs appended to the gallery.' ],
+						'alt'               => [ 'type' => 'string', 'description' => 'Legacy: alt text for the main image.' ],
+						'gallery_alts'      => [ 'type' => 'array', 'description' => 'Legacy: alt text per gallery image, in order.' ],
 					],
 					'required'   => [ 'product_id' ],
 				],
@@ -330,6 +363,51 @@ trait WPMCP_WooCommerce_Tools {
 					'type'       => 'object',
 					'properties' => [
 						'limit' => [ 'type' => 'integer', 'description' => 'Products to scan. Default 500.' ],
+					],
+				],
+			],
+			[
+				'group'       => 'woocommerce',
+				'name'        => 'generate_product_schema',
+				'description' => 'Build Merchant-grade Product structured data for one product or the whole catalogue: identifiers (gtin, mpn, sku), brand, images, category, colour/size/material, price with a validity date, stock, shipping policy, return policy, ratings and reviews. Variable products become a ProductGroup with every variation as a hasVariant offer. Policy facts can be saved once and reused on later runs. Returns the JSON-LD; pass apply=true to store it.',
+				'inputSchema' => [
+					'type'       => 'object',
+					'properties' => [
+						'product_id'       => [ 'type' => 'integer', 'description' => 'A single product.' ],
+						'ids'              => [ 'type' => 'array', 'description' => 'Several products.' ],
+						'all'              => [ 'type' => 'boolean', 'description' => 'Walk every published product instead.' ],
+						'limit'            => [ 'type' => 'integer', 'description' => 'With all: products per run. Default 50, max 500.' ],
+						'offset'           => [ 'type' => 'integer', 'description' => 'With all: where to resume. Default 0.' ],
+						'brand'            => [ 'type' => 'string', 'description' => 'Brand name, when the product has no brand taxonomy term.' ],
+						'gtin'             => [ 'type' => 'string', 'description' => 'GTIN/EAN/UPC. Only sensible for a single product.' ],
+						'mpn'              => [ 'type' => 'string', 'description' => 'Manufacturer part number. Only sensible for a single product.' ],
+						'condition'        => [ 'type' => 'string', 'description' => 'NewCondition (default), UsedCondition, RefurbishedCondition, DamagedCondition.' ],
+						'seller'           => [ 'type' => 'string', 'description' => 'Selling organisation. Defaults to the site name.' ],
+						'price_valid_days' => [ 'type' => 'integer', 'description' => 'How long the price is guaranteed. Default 365.' ],
+						'shipping'         => [ 'type' => 'object', 'description' => 'Shipping policy: rate, currency, country, handling_days_min/max, transit_days_min/max, free_over.' ],
+						'returns'          => [ 'type' => 'object', 'description' => 'Return policy: days, country, fees (free|paid), method (ReturnByMail|ReturnInStore).' ],
+						'include_reviews'  => [ 'type' => 'boolean', 'description' => 'Embed recent reviews. Default true.' ],
+						'max_reviews'      => [ 'type' => 'integer', 'description' => 'How many reviews to embed. Default 5, max 20.' ],
+						'save_defaults'    => [ 'type' => 'boolean', 'description' => 'Remember brand, seller, condition, shipping and returns for later runs. Default false.' ],
+						'apply'            => [ 'type' => 'boolean', 'description' => 'Write the JSON-LD onto each product. Default false.' ],
+					],
+				],
+			],
+			[
+				'group'       => 'woocommerce',
+				'name'        => 'product_seo_fix',
+				'description' => 'Repair what product_seo_audit reports, in bulk: write missing SEO titles and meta descriptions from the product\'s own facts, fill missing image alt text, and generate Product schema. Only touches what is actually missing, keeps every result inside Google\'s pixel budget, and is a dry run by default so the copy can be reviewed first.',
+				'inputSchema' => [
+					'type'       => 'object',
+					'properties' => [
+						'fix'                  => [ 'type' => 'array', 'description' => 'What to repair: seo_title, meta_description, image_alt, schema, focus_keyword. Default: seo_title, meta_description, image_alt.' ],
+						'ids'                  => [ 'type' => 'array', 'description' => 'Specific product IDs. Omit to walk published products.' ],
+						'title_template'       => [ 'type' => 'string', 'description' => 'Default "{title} {separator} {site}". Placeholders: {title} {category} {brand} {sku} {price} {site} {tagline} {separator}.' ],
+						'description_template' => [ 'type' => 'string', 'description' => 'Omit to write a description from the product\'s short description, trimmed to fit.' ],
+						'separator'            => [ 'type' => 'string', 'description' => 'What {separator} renders as. Default |.' ],
+						'limit'                => [ 'type' => 'integer', 'description' => 'Products per run. Default 50, max 500.' ],
+						'offset'               => [ 'type' => 'integer', 'description' => 'Where to resume. Default 0.' ],
+						'dry_run'              => [ 'type' => 'boolean', 'description' => 'Default TRUE. Set false to apply.' ],
 					],
 				],
 			],
@@ -1341,7 +1419,12 @@ trait WPMCP_WooCommerce_Tools {
 						];
 					}
 					if ( ! $dry ) {
+						WPMCP_Journal::product(
+							$target->get_id(),
+							[ 'regular_price', 'sale_price', 'date_on_sale_from', 'date_on_sale_to', 'stock_status', 'catalog_visibility', 'featured' ]
+						);
 						$target->save();
+						WPMCP_Progress::tick( 1, $target->get_name() );
 					}
 				}
 
@@ -1486,7 +1569,22 @@ trait WPMCP_WooCommerce_Tools {
 			if ( isset( $args['stock_quantity'] ) ) {
 				$variation->set_stock_quantity( (int) $args['stock_quantity'] );
 			}
-			if ( isset( $args['image_id'] ) ) {
+			if ( isset( $args['image'] ) && is_array( $args['image'] ) ) {
+				$errors  = [];
+				$ingest  = $this->ingest_product_image(
+					$args['image'],
+					[ 'post_id' => $variation->get_parent_id(), 'max_dimension' => 2000, 'quality' => 82 ],
+					$parent->get_name(),
+					$parent->get_name(),
+					0,
+					false,
+					$errors,
+					'variation'
+				);
+				if ( $ingest ) {
+					$variation->set_image_id( (int) $ingest['id'] );
+				}
+			} elseif ( isset( $args['image_id'] ) ) {
 				$variation->set_image_id( (int) $args['image_id'] );
 			}
 			if ( isset( $args['sale_from'] ) ) {
@@ -1885,6 +1983,181 @@ trait WPMCP_WooCommerce_Tools {
 		}
 		return [ 'success' => true, 'term_id' => (int) $args['term_id'] ];
 	}
+	/**
+	 * @param array $args Args.
+	 * @return array
+	 */
+	private function tool_bulk_assign_variation_images( $args ) {
+		$parent = $this->get_wc_product( (int) $args['product_id'], false );
+		if ( ! $parent->is_type( 'variable' ) ) {
+			WPMCP_Errors::fail(
+				WPMCP_Errors::INVALID_ARGUMENT,
+				sprintf( '"%s" is a %s product, not a variable one.', $parent->get_name(), $parent->get_type() ),
+				'Only variable products have variations. Use manage_product_images for a simple product.',
+				[ 'type' => $parent->get_type() ]
+			);
+		}
+
+		$map = (array) $args['images'];
+		if ( ! $map ) {
+			WPMCP_Errors::fail( WPMCP_Errors::MISSING_ARGUMENT, 'images must map at least one attribute value to an image.' );
+		}
+
+		$attribute = $this->resolve_variation_attribute( $parent, (string) ( $args['attribute'] ?? '' ) );
+		$dry       = ! isset( $args['dry_run'] ) || WPMCP_Util::bool( $args['dry_run'], true );
+		$overwrite = WPMCP_Util::bool( $args['overwrite'] ?? null );
+
+		// Normalise the keys so "Red", "red" and "pa_color-red" all match.
+		$normalised = [];
+		foreach ( $map as $value => $source ) {
+			$normalised[ sanitize_title( (string) $value ) ] = $source;
+		}
+
+		$children = $parent->get_children();
+		$planned  = [];
+		$errors   = [];
+		$cache    = [];
+		$applied  = 0;
+		$gallery  = array_map( 'intval', $parent->get_gallery_image_ids() );
+		$to_gallery = WPMCP_Util::bool( $args['add_to_gallery'] ?? null );
+
+		foreach ( $children as $child_id ) {
+			$variation = wc_get_product( $child_id );
+			if ( ! $variation ) {
+				continue;
+			}
+			$attrs = $variation->get_attributes();
+			$value = '';
+			foreach ( $attrs as $key => $val ) {
+				if ( sanitize_title( $this->normalise_attribute_key( $key ) ) === sanitize_title( $attribute ) ) {
+					$value = (string) $val;
+					break;
+				}
+			}
+			$slug = sanitize_title( $value );
+			if ( '' === $slug || ! isset( $normalised[ $slug ] ) ) {
+				continue;
+			}
+			$has = (int) $variation->get_image_id();
+			if ( $has && ! $overwrite ) {
+				$planned[] = [
+					'variation_id' => (int) $child_id,
+					'value'        => $value,
+					'skipped'      => 'already has an image; pass overwrite=true to replace it',
+				];
+				continue;
+			}
+
+			if ( $dry ) {
+				$planned[] = [
+					'variation_id' => (int) $child_id,
+					'value'        => $value,
+					'will_use'     => is_array( $normalised[ $slug ] ) ? array_intersect_key( $normalised[ $slug ], array_flip( [ 'id', 'url', 'path', 'filename' ] ) ) : $normalised[ $slug ],
+				];
+				continue;
+			}
+
+			// Ingest each distinct source once, then share the attachment
+			// across every variation that maps to it.
+			if ( ! isset( $cache[ $slug ] ) ) {
+				$result = $this->ingest_product_image(
+					$normalised[ $slug ],
+					[
+						'post_id'       => $parent->get_id(),
+						'max_dimension' => isset( $args['max_dimension'] ) ? max( 0, (int) $args['max_dimension'] ) : 2000,
+						'convert'       => strtolower( trim( (string) ( $args['convert'] ?? '' ) ) ),
+						'quality'       => 82,
+					],
+					$parent->get_name() . ' ' . $value,
+					$parent->get_name() . ' - ' . $value,
+					0,
+					true,
+					$errors,
+					'variation:' . $value
+				);
+				$cache[ $slug ] = $result ? (int) $result['id'] : 0;
+			}
+			if ( ! $cache[ $slug ] ) {
+				continue;
+			}
+
+			$variation->set_image_id( $cache[ $slug ] );
+			$this->save_wc_object( $variation, 'variation' );
+			$applied++;
+			if ( $to_gallery && ! in_array( $cache[ $slug ], $gallery, true ) ) {
+				$gallery[] = $cache[ $slug ];
+			}
+			$planned[] = [
+				'variation_id' => (int) $child_id,
+				'value'        => $value,
+				'image_id'     => $cache[ $slug ],
+				'image_url'    => wp_get_attachment_url( $cache[ $slug ] ),
+			];
+		}
+
+		if ( ! $dry && $to_gallery ) {
+			$gallery = array_values( array_diff( array_unique( $gallery ), [ (int) $parent->get_image_id() ] ) );
+			$parent->set_gallery_image_ids( $gallery );
+			$this->save_wc_object( $parent, 'product' );
+		}
+
+		$unmatched = array_values( array_diff( array_keys( $normalised ), array_map( 'sanitize_title', wp_list_pluck( $planned, 'value' ) ) ) );
+
+		return [
+			'dry_run'          => $dry,
+			'product_id'       => $parent->get_id(),
+			'attribute'        => $attribute,
+			'variations'       => count( $children ),
+			'assigned'         => $applied,
+			'results'          => $planned,
+			'unmatched_values' => $unmatched,
+			'errors'           => $errors,
+			'next_step'        => $dry
+				? 'Dry run — nothing was changed. Check each variation lines up with the right image, then call again with dry_run=false.'
+				: ( $unmatched ? 'Some image keys matched no variation — check they use the same attribute values as the product.' : 'Every matching variation now has its own image.' ),
+		];
+	}
+
+	/**
+	 * Work out which attribute a variation image map keys on.
+	 *
+	 * @param WC_Product $parent    Variable product.
+	 * @param string     $requested Caller-supplied attribute name, or ''.
+	 * @return string Normalised attribute key.
+	 * @throws WPMCP_Tool_Exception When it cannot be resolved unambiguously.
+	 */
+	private function resolve_variation_attribute( $parent, $requested ) {
+		$used = [];
+		foreach ( $parent->get_attributes() as $key => $attribute ) {
+			$is_variation = is_object( $attribute ) && method_exists( $attribute, 'get_variation' ) ? $attribute->get_variation() : true;
+			if ( $is_variation ) {
+				$used[] = $this->normalise_attribute_key( $key );
+			}
+		}
+
+		if ( '' !== $requested ) {
+			$want = $this->normalise_attribute_key( $requested );
+			if ( ! in_array( $want, $used, true ) ) {
+				WPMCP_Errors::fail(
+					WPMCP_Errors::INVALID_ARGUMENT,
+					sprintf( '"%s" is not one of this product\'s variation attributes.', $requested ),
+					sprintf( 'Available: %s.', implode( ', ', $used ) ?: 'none' ),
+					[ 'available' => $used ]
+				);
+			}
+			return $want;
+		}
+
+		if ( 1 !== count( $used ) ) {
+			WPMCP_Errors::fail(
+				WPMCP_Errors::MISSING_ARGUMENT,
+				'This product varies on more than one attribute, so the images map is ambiguous.',
+				sprintf( 'Pass attribute= one of: %s.', implode( ', ', $used ) ?: 'none' ),
+				[ 'available' => $used ]
+			);
+		}
+		return $used[0];
+	}
 
 	/**
 	 * @param array $args Args.
@@ -1892,44 +2165,238 @@ trait WPMCP_WooCommerce_Tools {
 	 */
 	private function tool_manage_product_images( $args ) {
 		$product = $this->get_wc_product( (int) $args['product_id'] );
+		$name    = $product->get_name();
 
-		$main = isset( $args['image_id'] ) ? (int) $args['image_id'] : 0;
-		if ( ! empty( $args['image_url'] ) ) {
-			$main = $this->sideload_to_media( (string) $args['image_url'], $product->get_id() );
+		$convert = strtolower( trim( (string) ( $args['convert'] ?? '' ) ) );
+		if ( '' !== $convert && ! WPMCP_Media::mime_for( $convert ) ) {
+			WPMCP_Errors::fail(
+				WPMCP_Errors::INVALID_ARGUMENT,
+				sprintf( '"%s" is not a format this tool can write.', $convert ),
+				'Use webp, avif, jpg or png — or omit convert to keep each source format.',
+				[ 'accepted' => [ 'webp', 'avif', 'jpg', 'png' ] ]
+			);
 		}
-		if ( $main ) {
-			$product->set_image_id( $main );
-			if ( ! empty( $args['alt'] ) ) {
-				update_post_meta( $main, '_wp_attachment_image_alt', sanitize_text_field( $args['alt'] ) );
+
+		$opts = [
+			'post_id'       => $product->get_id(),
+			'dedup'         => ! isset( $args['dedup'] ) || WPMCP_Util::bool( $args['dedup'], true ),
+			'max_dimension' => isset( $args['max_dimension'] ) ? max( 0, (int) $args['max_dimension'] ) : 2000,
+			'convert'       => $convert,
+			'quality'       => (int) ( $args['quality'] ?? 82 ),
+		];
+
+		$seo_name = ( ! isset( $args['seo_filenames'] ) || WPMCP_Util::bool( $args['seo_filenames'], true ) ) ? $name : '';
+		$auto_alt = ( ! isset( $args['auto_alt'] ) || WPMCP_Util::bool( $args['auto_alt'], true ) ) ? $name : '';
+		$lenient  = ! isset( $args['continue_on_error'] ) || WPMCP_Util::bool( $args['continue_on_error'], true );
+
+		$errors   = [];
+		$ingested = [];
+
+		// --- Main image -------------------------------------------------
+		$main_spec = null;
+		if ( isset( $args['main'] ) && is_array( $args['main'] ) ) {
+			$main_spec = $args['main'];
+		} elseif ( ! empty( $args['image_url'] ) ) {
+			$main_spec = [ 'url' => (string) $args['image_url'] ];
+		} elseif ( isset( $args['image_id'] ) && (int) $args['image_id'] > 0 ) {
+			$main_spec = [ 'id' => (int) $args['image_id'] ];
+		}
+		if ( null !== $main_spec && isset( $args['alt'] ) && ! isset( $main_spec['alt'] ) ) {
+			$main_spec['alt'] = (string) $args['alt'];
+		}
+
+		$main_id = (int) $product->get_image_id();
+		if ( null !== $main_spec ) {
+			$result = $this->ingest_product_image( $main_spec, $opts, $seo_name, $auto_alt, 0, $lenient, $errors, 'main' );
+			if ( $result ) {
+				$main_id    = (int) $result['id'];
+				$ingested[] = array_merge( $result, [ 'role' => 'main' ] );
+			}
+		}
+		if ( WPMCP_Util::bool( $args['detach_main'] ?? null ) ) {
+			$main_id = 0;
+		}
+
+		// --- Gallery ----------------------------------------------------
+		$existing = array_map( 'intval', $product->get_gallery_image_ids() );
+		$mode     = strtolower( (string) ( $args['mode'] ?? '' ) );
+		$specs    = [];
+		$touched  = false;
+
+		if ( isset( $args['gallery'] ) ) {
+			foreach ( WPMCP_Util::to_array( $args['gallery'] ) as $item ) {
+				$specs[] = $item;
+			}
+			$touched = true;
+			if ( '' === $mode ) {
+				$mode = 'replace';
+			}
+		}
+		// Legacy shape: gallery_ids replaced the gallery, gallery_urls were
+		// appended to it. Keep both meanings working.
+		if ( isset( $args['gallery_ids'] ) ) {
+			foreach ( WPMCP_Util::to_array( $args['gallery_ids'] ) as $gid ) {
+				$specs[] = [ 'id' => (int) $gid ];
+			}
+			$touched = true;
+			if ( '' === $mode ) {
+				$mode = 'replace';
+			}
+		}
+		if ( isset( $args['gallery_urls'] ) ) {
+			foreach ( WPMCP_Util::to_array( $args['gallery_urls'] ) as $url ) {
+				$specs[] = [ 'url' => (string) $url ];
+			}
+			$touched = true;
+			if ( '' === $mode ) {
+				$mode = 'append';
+			}
+		}
+		if ( ! in_array( $mode, [ 'replace', 'append', 'prepend' ], true ) ) {
+			$mode = 'replace';
+		}
+
+		$fresh = [];
+		foreach ( $specs as $index => $spec ) {
+			$result = $this->ingest_product_image( $spec, $opts, $seo_name, $auto_alt, $index + 2, $lenient, $errors, 'gallery' );
+			if ( $result ) {
+				$fresh[]    = (int) $result['id'];
+				$ingested[] = array_merge( $result, [ 'role' => 'gallery' ] );
 			}
 		}
 
-		$gallery = isset( $args['gallery_ids'] ) ? array_map( 'intval', WPMCP_Util::to_array( $args['gallery_ids'] ) ) : $product->get_gallery_image_ids();
-		foreach ( WPMCP_Util::to_array( $args['gallery_urls'] ?? [] ) as $url ) {
-			$gallery[] = $this->sideload_to_media( (string) $url, $product->get_id() );
+		if ( ! $touched ) {
+			$gallery = $existing;
+		} elseif ( 'append' === $mode ) {
+			$gallery = array_merge( $existing, $fresh );
+		} elseif ( 'prepend' === $mode ) {
+			$gallery = array_merge( $fresh, $existing );
+		} else {
+			$gallery = $fresh;
+		}
+
+		$remove = array_map( 'intval', WPMCP_Util::to_array( $args['remove_ids'] ?? [] ) );
+		if ( $remove ) {
+			$gallery = array_diff( $gallery, $remove );
 		}
 		$gallery = array_values( array_unique( array_filter( array_map( 'intval', $gallery ) ) ) );
-		$product->set_gallery_image_ids( $gallery );
+		if ( $main_id ) {
+			// The main image is shown on its own; leaving it in the gallery too
+			// just renders the same photo twice.
+			$gallery = array_values( array_diff( $gallery, [ $main_id ] ) );
+		}
 
+		$reorder = array_values( array_filter( array_map( 'intval', WPMCP_Util::to_array( $args['reorder'] ?? [] ) ) ) );
+		if ( $reorder ) {
+			$wanted  = array_values( array_intersect( $reorder, $gallery ) );
+			$gallery = array_merge( $wanted, array_values( array_diff( $gallery, $wanted ) ) );
+		}
+
+		// Legacy per-position alt text, applied to the final order.
 		$alts = WPMCP_Util::to_array( $args['gallery_alts'] ?? [] );
 		foreach ( $gallery as $index => $gid ) {
 			if ( isset( $alts[ $index ] ) && '' !== $alts[ $index ] ) {
 				update_post_meta( $gid, '_wp_attachment_image_alt', sanitize_text_field( $alts[ $index ] ) );
+			} elseif ( '' !== $auto_alt && '' === (string) get_post_meta( $gid, '_wp_attachment_image_alt', true ) ) {
+				update_post_meta( $gid, '_wp_attachment_image_alt', sanitize_text_field( $auto_alt ) );
+			}
+		}
+		if ( $main_id && '' !== $auto_alt && '' === (string) get_post_meta( $main_id, '_wp_attachment_image_alt', true ) ) {
+			update_post_meta( $main_id, '_wp_attachment_image_alt', sanitize_text_field( $auto_alt ) );
+		}
+
+		WPMCP_Journal::product( $product->get_id(), [ 'image_id' ] );
+		WPMCP_Journal::post_meta( $product->get_id(), '_product_image_gallery' );
+		$product->set_image_id( $main_id ? $main_id : '' );
+		$product->set_gallery_image_ids( $gallery );
+		$this->save_wc_object( $product, 'product' );
+
+		$missing_alt = [];
+		foreach ( array_filter( array_merge( [ $main_id ], $gallery ) ) as $aid ) {
+			if ( '' === (string) get_post_meta( $aid, '_wp_attachment_image_alt', true ) ) {
+				$missing_alt[] = (int) $aid;
 			}
 		}
 
-		$this->save_wc_object( $product, 'product' );
-
 		return [
-			'success'    => true,
-			'product_id' => $product->get_id(),
-			'image_id'   => $product->get_image_id() ?: null,
-			'gallery'    => $gallery,
+			'success'      => true,
+			'product_id'   => $product->get_id(),
+			'image_id'     => $main_id ? $main_id : null,
+			'image'        => $main_id ? WPMCP_Media::summary( $main_id ) : null,
+			'gallery'      => $gallery,
+			'gallery_urls' => array_map( 'wp_get_attachment_url', $gallery ),
+			'mode'         => $touched ? $mode : 'unchanged',
+			'ingested'     => $ingested,
+			'errors'       => $errors,
+			'missing_alt'  => $missing_alt,
+			'next_step'    => $errors
+				? 'Some sources failed — see errors. Everything else was saved; re-send just the failures.'
+				: ( $missing_alt ? 'Images without alt text are listed in missing_alt. Set them with set_image_alt or bulk_set_image_alt.' : 'Images saved. Run product_seo_audit to confirm nothing else is missing.' ),
 		];
 	}
 
 	/**
+	 * Normalise one image spec and put it into the library.
+	 *
+	 * A spec may be an attachment ID, a URL string, or an object with
+	 * id|url|base64|path plus descriptive fields.
+	 *
+	 * @param mixed  $spec     The caller's image spec.
+	 * @param array  $opts     Shared ingest options.
+	 * @param string $seo_name Product name to rename the file after, or ''.
+	 * @param string $auto_alt Fallback alt text, or ''.
+	 * @param int    $position 0 for the main image, 2+ for gallery slots.
+	 * @param bool   $lenient  Collect the failure instead of aborting.
+	 * @param array  $errors   Collected failures, by reference.
+	 * @param string $role     Label used in the error report.
+	 * @return array|null Attachment summary, or null when the source failed.
+	 * @throws WPMCP_Tool_Exception When a source fails and $lenient is false.
+	 */
+	private function ingest_product_image( $spec, $opts, $seo_name, $auto_alt, $position, $lenient, &$errors, $role ) {
+		if ( is_numeric( $spec ) ) {
+			$spec = [ 'id' => (int) $spec ];
+		} elseif ( is_string( $spec ) ) {
+			$spec = [ 'url' => $spec ];
+		}
+		if ( ! is_array( $spec ) || ! $spec ) {
+			$errors[] = [ 'role' => $role, 'error' => 'Empty or unreadable image spec.', 'code' => WPMCP_Errors::INVALID_ARGUMENT ];
+			return null;
+		}
+
+		$source = array_intersect_key( $spec, array_flip( [ 'id', 'url', 'base64', 'path', 'filename' ] ) );
+		$fields = array_intersect_key( $spec, array_flip( [ 'filename', 'alt', 'title', 'caption', 'description' ] ) );
+
+		if ( '' !== $seo_name && empty( $spec['filename'] ) ) {
+			// black-cotton-hoodie.jpg for the main shot, then -2, -3 ... for
+			// the gallery, which is what a human would have named them.
+			$fields['seo_name'] = $position > 0 ? $seo_name . ' ' . $position : $seo_name;
+		}
+		if ( '' !== $auto_alt && empty( $spec['alt'] ) ) {
+			$fields['alt'] = $auto_alt;
+		}
+
+		try {
+			return WPMCP_Media::ingest( $source, array_merge( $opts, $fields ) );
+		} catch ( WPMCP_Tool_Exception $e ) {
+			if ( ! $lenient ) {
+				throw $e;
+			}
+			$errors[] = [
+				'role'   => $role,
+				'source' => $spec['url'] ?? ( $spec['path'] ?? ( isset( $spec['id'] ) ? 'attachment ' . (int) $spec['id'] : 'base64' ) ),
+				'error'  => $e->getMessage(),
+				'code'   => $e->get_error_code(),
+				'hint'   => $e->get_hint(),
+			];
+			return null;
+		}
+	}
+
+	/**
 	 * Download a remote file into the media library.
+	 *
+	 * Kept as a thin wrapper over the shared ingest engine so older call sites
+	 * keep working.
 	 *
 	 * @param string $url     Source URL.
 	 * @param int    $post_id Parent post.
@@ -1937,30 +2404,8 @@ trait WPMCP_WooCommerce_Tools {
 	 * @throws WPMCP_Tool_Exception On download failure.
 	 */
 	private function sideload_to_media( $url, $post_id = 0 ) {
-		require_once ABSPATH . 'wp-admin/includes/image.php';
-		require_once ABSPATH . 'wp-admin/includes/file.php';
-		require_once ABSPATH . 'wp-admin/includes/media.php';
-
-		if ( ! wp_http_validate_url( $url ) ) {
-			WPMCP_Errors::fail( WPMCP_Errors::INVALID_ARGUMENT, sprintf( '"%s" is not a fetchable URL.', $url ) );
-		}
-		$tmp = download_url( $url, 60 );
-		if ( is_wp_error( $tmp ) ) {
-			WPMCP_Errors::from_wp_error( $tmp, WPMCP_Errors::UPSTREAM_FAILED, 'Check the URL is publicly reachable from the server.' );
-		}
-		$name = sanitize_file_name( basename( (string) wp_parse_url( $url, PHP_URL_PATH ) ) );
-		if ( '' === $name ) {
-			$name = 'image.jpg';
-		}
-		$this->assert_uploadable_filename( $name );
-		$id = media_handle_sideload( [ 'name' => $name, 'tmp_name' => $tmp ], (int) $post_id );
-		if ( is_wp_error( $id ) ) {
-			if ( file_exists( $tmp ) ) {
-				@unlink( $tmp ); // phpcs:ignore WordPress.PHP.NoSilencedErrors
-			}
-			WPMCP_Errors::from_wp_error( $id, WPMCP_Errors::IO_FAILED );
-		}
-		return (int) $id;
+		$result = WPMCP_Media::ingest( [ 'url' => $url ], [ 'post_id' => (int) $post_id ] );
+		return (int) $result['id'];
 	}
 
 	/**
@@ -2072,8 +2517,13 @@ trait WPMCP_WooCommerce_Tools {
 					'stock_status'   => $product->get_stock_status(),
 				];
 				if ( ! $dry ) {
+					WPMCP_Journal::product(
+						$product->get_id(),
+						[ 'stock_quantity', 'stock_status', 'manage_stock', 'backorders', 'low_stock_amount' ]
+					);
 					$product->save();
 					$updated++;
+					WPMCP_Progress::tick( 1, $product->get_name() );
 				}
 				$results[] = [
 					'id'     => $entry['id'],
@@ -2205,17 +2655,26 @@ trait WPMCP_WooCommerce_Tools {
 			'missing_price'            => 0,
 			'no_category'              => 0,
 			'no_schema'                => 0,
+			'missing_social_image'     => 0,
+			'duplicate_description'    => 0,
 		];
+		$description_hashes = [];
 		$titles  = [];
 		$worst   = [];
 		$scanned = 0;
 
+		WPMCP_Progress::start( 'product_seo_audit', count( $q->posts ), 'auditing products' );
+
 		foreach ( $q->posts as $pid ) {
+			if ( WPMCP_Progress::should_stop() ) {
+				break;
+			}
 			$product = wc_get_product( $pid );
 			if ( ! $product ) {
 				continue;
 			}
 			$scanned++;
+			WPMCP_Progress::tick();
 			$seo    = WPMCP_SEO::get_post_seo( $pid );
 			$issues = [];
 
@@ -2258,6 +2717,22 @@ trait WPMCP_WooCommerce_Tools {
 			if ( ! get_post_meta( $pid, WPMCP_Frontend::JSONLD_META, true ) ) {
 				$counts['no_schema']++;
 			}
+			if ( '' === (string) ( $seo['og_image'] ?? '' ) && ! $image_id ) {
+				$counts['missing_social_image']++;
+			}
+			// Boilerplate copied across a range is thin content in Google's
+			// eyes even when each product is genuinely different.
+			$body = WPMCP_Util::lower( trim( preg_replace( '/\s+/u', ' ', wp_strip_all_tags( $product->get_description() ) ) ) );
+			if ( '' !== $body ) {
+				$fingerprint = md5( mb_substr( $body, 0, 300 ) );
+				if ( isset( $description_hashes[ $fingerprint ] ) ) {
+					$counts['duplicate_description']++;
+					$issues[] = 'duplicate description';
+					$description_hashes[ $fingerprint ][] = (int) $pid;
+				} else {
+					$description_hashes[ $fingerprint ] = [ (int) $pid ];
+				}
+			}
 
 			$titles[ $product->get_name() ] = ( $titles[ $product->get_name() ] ?? 0 ) + 1;
 			if ( count( $issues ) >= 3 && count( $worst ) < 50 ) {
@@ -2287,10 +2762,336 @@ trait WPMCP_WooCommerce_Tools {
 			],
 			$counts,
 			[
-				'duplicate_titles'   => $dupes,
-				'worst_offenders'    => $worst,
+				'duplicate_titles'       => $dupes,
+				'duplicate_descriptions' => array_values(
+					array_filter(
+						$description_hashes,
+						function ( $group ) {
+							return count( $group ) > 1;
+						}
+					)
+				),
+				'worst_offenders'        => $worst,
+				'next_step'              => 'product_seo_fix repairs missing titles, descriptions, alt text and schema in bulk — run it with dry_run=true first. generate_product_schema adds the brand, identifier and policy fields Merchant Center wants.',
 			]
 		);
+	}
+
+	/**
+	 * @param array $args Args.
+	 * @return array
+	 */
+	private function tool_generate_product_schema( $args ) {
+		$this->require_woo();
+
+		$opts = array_intersect_key(
+			$args,
+			array_flip( [ 'brand', 'gtin', 'mpn', 'condition', 'seller', 'price_valid_days', 'shipping', 'returns', 'include_reviews', 'max_reviews' ] )
+		);
+
+		if ( WPMCP_Util::bool( $args['save_defaults'] ?? null ) ) {
+			// Identifiers belong to one product; policy facts belong to the shop.
+			$keep = array_diff_key( $opts, array_flip( [ 'gtin', 'mpn' ] ) );
+			WPMCP_Schema::save_defaults( array_merge( WPMCP_Schema::defaults(), $keep ) );
+		}
+
+		$ids = array_values( array_filter( array_map( 'intval', WPMCP_Util::to_array( $args['ids'] ?? [] ) ) ) );
+		if ( ! empty( $args['product_id'] ) ) {
+			$ids[] = (int) $args['product_id'];
+		}
+		$offset = max( 0, (int) ( $args['offset'] ?? 0 ) );
+		$limit  = min( max( 1, (int) ( $args['limit'] ?? 50 ) ), 500 );
+		$total  = count( $ids );
+
+		if ( ! $ids ) {
+			if ( ! WPMCP_Util::bool( $args['all'] ?? null ) ) {
+				WPMCP_Errors::fail(
+					WPMCP_Errors::MISSING_ARGUMENT,
+					'No products selected.',
+					'Pass product_id, ids, or all=true.',
+					[ 'accepted' => [ 'product_id', 'ids', 'all' ] ]
+				);
+			}
+			$q     = new WP_Query(
+				[
+					'post_type'              => 'product',
+					'post_status'            => 'publish',
+					'posts_per_page'         => $limit,
+					'offset'                 => $offset,
+					'fields'                 => 'ids',
+					'orderby'                => 'ID',
+					'order'                  => 'ASC',
+					'update_post_term_cache' => false,
+				]
+			);
+			$ids   = $q->posts;
+			$total = (int) $q->found_posts;
+		} else {
+			$ids = array_slice( array_unique( $ids ), 0, $limit );
+		}
+
+		$apply    = WPMCP_Util::bool( $args['apply'] ?? null );
+		$results  = [];
+		$applied  = 0;
+		$warned   = 0;
+
+		foreach ( $ids as $pid ) {
+			try {
+				$built = WPMCP_Schema::product( (int) $pid, $opts );
+			} catch ( WPMCP_Tool_Exception $e ) {
+				$results[] = [ 'id' => (int) $pid, 'error' => $e->getMessage(), 'code' => $e->get_error_code() ];
+				continue;
+			}
+			if ( $built['warnings'] ) {
+				$warned++;
+			}
+			$row = [
+				'id'       => (int) $pid,
+				'name'     => get_the_title( $pid ),
+				'type'     => $built['schema']['@type'],
+				'warnings' => $built['warnings'],
+			];
+			if ( $apply ) {
+				$json = wp_json_encode( $built['schema'] );
+				if ( false === $json ) {
+					$row['error'] = 'The generated schema could not be encoded to JSON.';
+				} else {
+					WPMCP_Journal::post_meta( (int) $pid, WPMCP_Frontend::JSONLD_META );
+					update_post_meta( (int) $pid, WPMCP_Frontend::JSONLD_META, wp_slash( $json ) );
+					$applied++;
+					$row['applied'] = true;
+				}
+			}
+			// One product returns the whole object; a sweep would be unreadable.
+			if ( 1 === count( $ids ) ) {
+				$row['schema'] = $built['schema'];
+			}
+			$results[] = $row;
+		}
+
+		$next = $offset + count( $ids );
+
+		return [
+			'applied'         => $apply ? $applied : 0,
+			'count'           => count( $results ),
+			'with_warnings'   => $warned,
+			'results'         => $results,
+			'stored_defaults' => WPMCP_Schema::defaults(),
+			'total'           => $total,
+			'next_offset'     => $next < $total ? $next : null,
+			'next_step'       => $apply
+				? ( $next < $total ? sprintf( 'Call again with offset=%d for the next batch.', $next ) : 'Validate a product URL in Google\'s Rich Results Test to confirm.' )
+				: 'Nothing was written. Review the warnings, supply the missing policy facts, then call again with apply=true.',
+		];
+	}
+
+	/**
+	 * @param array $args Args.
+	 * @return array
+	 */
+	private function tool_product_seo_fix( $args ) {
+		$this->require_woo();
+
+		$allowed = [ 'seo_title', 'meta_description', 'image_alt', 'schema', 'focus_keyword' ];
+		$fix     = array_values( array_intersect( WPMCP_Util::to_array( $args['fix'] ?? [] ), $allowed ) );
+		if ( ! $fix ) {
+			$fix = [ 'seo_title', 'meta_description', 'image_alt' ];
+		}
+
+		$dry    = ! isset( $args['dry_run'] ) || WPMCP_Util::bool( $args['dry_run'], true );
+		$limit  = min( max( 1, (int) ( $args['limit'] ?? 50 ) ), 500 );
+		$offset = max( 0, (int) ( $args['offset'] ?? 0 ) );
+		$sep    = (string) ( $args['separator'] ?? '|' );
+		$title_template = (string) ( $args['title_template'] ?? '{title} {separator} {site}' );
+		$desc_template  = (string) ( $args['description_template'] ?? '' );
+
+		$ids = array_values( array_filter( array_map( 'intval', WPMCP_Util::to_array( $args['ids'] ?? [] ) ) ) );
+		if ( $ids ) {
+			$posts = array_slice( $ids, $offset, $limit );
+			$total = count( $ids );
+		} else {
+			$q     = new WP_Query(
+				[
+					'post_type'              => 'product',
+					'post_status'            => 'publish',
+					'posts_per_page'         => $limit,
+					'offset'                 => $offset,
+					'fields'                 => 'ids',
+					'orderby'                => 'ID',
+					'order'                  => 'ASC',
+					'update_post_term_cache' => false,
+				]
+			);
+			$posts = $q->posts;
+			$total = (int) $q->found_posts;
+		}
+
+		$changes = [];
+		$counts  = array_fill_keys( $allowed, 0 );
+
+		WPMCP_Progress::start( 'product_seo_fix', count( $posts ), 'repairing product SEO' );
+		$stopped = false;
+
+		foreach ( $posts as $index => $pid ) {
+			if ( WPMCP_Progress::should_stop() ) {
+				$stopped = true;
+				$posts   = array_slice( $posts, 0, $index );
+				break;
+			}
+			WPMCP_Progress::tick();
+			$pid     = (int) $pid;
+			$product = wc_get_product( $pid );
+			if ( ! $product ) {
+				continue;
+			}
+			$seo    = WPMCP_SEO::get_post_seo( $pid );
+			$fields = [];
+			$row    = [ 'id' => $pid, 'name' => $product->get_name(), 'fixed' => [] ];
+
+			if ( in_array( 'seo_title', $fix, true ) && '' === $seo['title'] ) {
+				$value = $this->render_seo_template( $title_template, $pid, $sep );
+				if ( '' !== $value ) {
+					$value            = $this->trim_to_serp_width( $value, 'title' );
+					$fields['title']  = $value;
+					$row['fixed'][]   = 'seo_title';
+					$row['seo_title'] = $value;
+					$counts['seo_title']++;
+				}
+			}
+
+			if ( in_array( 'meta_description', $fix, true ) && '' === $seo['description'] ) {
+				$value = '' !== $desc_template
+					? $this->render_seo_template( $desc_template, $pid, $sep )
+					: $this->product_description_copy( $product );
+				if ( '' !== $value ) {
+					$value                  = $this->trim_to_serp_width( $value, 'description' );
+					$fields['description']  = $value;
+					$row['fixed'][]         = 'meta_description';
+					$row['meta_description'] = $value;
+					$counts['meta_description']++;
+				}
+			}
+
+			if ( in_array( 'focus_keyword', $fix, true ) && '' === $seo['focus_keyword'] ) {
+				$fields['focus_keyword']  = WPMCP_Util::lower( $product->get_name() );
+				$row['fixed'][]           = 'focus_keyword';
+				$row['focus_keyword']     = $fields['focus_keyword'];
+				$counts['focus_keyword']++;
+			}
+
+			if ( in_array( 'image_alt', $fix, true ) ) {
+				$alts = [];
+				foreach ( array_filter( array_merge( [ (int) $product->get_image_id() ], array_map( 'intval', $product->get_gallery_image_ids() ) ) ) as $aid ) {
+					if ( '' !== (string) get_post_meta( $aid, '_wp_attachment_image_alt', true ) ) {
+						continue;
+					}
+					$alts[ $aid ] = $product->get_name();
+					if ( ! $dry ) {
+						WPMCP_Journal::post_meta( $aid, '_wp_attachment_image_alt' );
+						update_post_meta( $aid, '_wp_attachment_image_alt', sanitize_text_field( $product->get_name() ) );
+					}
+				}
+				if ( $alts ) {
+					$row['fixed'][]    = 'image_alt';
+					$row['image_alt']  = $alts;
+					$counts['image_alt'] += count( $alts );
+				}
+			}
+
+			if ( in_array( 'schema', $fix, true ) && ! get_post_meta( $pid, WPMCP_Frontend::JSONLD_META, true ) ) {
+				$built = WPMCP_Schema::product( $pid, [] );
+				if ( ! $dry ) {
+					$json = wp_json_encode( $built['schema'] );
+					if ( false !== $json ) {
+						WPMCP_Journal::post_meta( $pid, WPMCP_Frontend::JSONLD_META );
+						update_post_meta( $pid, WPMCP_Frontend::JSONLD_META, wp_slash( $json ) );
+					}
+				}
+				$row['fixed'][]         = 'schema';
+				$row['schema_type']     = $built['schema']['@type'];
+				$row['schema_warnings'] = $built['warnings'];
+				$counts['schema']++;
+			}
+
+			if ( $fields && ! $dry ) {
+				WPMCP_Journal::post_seo( $pid );
+				WPMCP_SEO::set_post_seo( $pid, $fields );
+			}
+			if ( $row['fixed'] ) {
+				$changes[] = $row;
+			}
+		}
+
+		$next = $offset + count( $posts );
+
+		if ( $stopped ) {
+			return array_merge(
+				[
+					'dry_run' => $dry,
+					'scanned' => count( $posts ),
+					'changed' => count( $changes ),
+					'by_fix'  => array_filter( $counts ),
+					'changes' => $changes,
+					'total'   => $total,
+				],
+				WPMCP_Progress::stopped_early( $offset + count( $posts ), $total, 'product_seo_fix' )
+			);
+		}
+
+		return [
+			'dry_run'     => $dry,
+			'scanned'     => count( $posts ),
+			'changed'     => count( $changes ),
+			'by_fix'      => array_filter( $counts ),
+			'changes'     => $changes,
+			'total'       => $total,
+			'next_offset' => $next < $total ? $next : null,
+			'next_step'   => $dry
+				? 'Dry run — nothing was written. The copy above is what will be saved; adjust the templates if it reads poorly, then call again with dry_run=false.'
+				: ( $next < $total ? sprintf( 'Call again with offset=%d for the next batch.', $next ) : 'Re-run product_seo_audit to confirm what is left.' ),
+		];
+	}
+
+	/**
+	 * A meta description built from the product's own copy.
+	 *
+	 * @param WC_Product $product Product.
+	 * @return string
+	 */
+	private function product_description_copy( $product ) {
+		$text = wp_strip_all_tags( strip_shortcodes( $product->get_short_description() ) );
+		if ( '' === trim( $text ) ) {
+			$text = wp_strip_all_tags( strip_shortcodes( $product->get_description() ) );
+		}
+		$text = trim( preg_replace( '/\s+/u', ' ', (string) $text ) );
+		if ( '' === $text ) {
+			return '';
+		}
+		return $text;
+	}
+
+	/**
+	 * Trim text to what Google will actually render, cutting on a word boundary.
+	 *
+	 * @param string $text  Text to trim.
+	 * @param string $field title|description.
+	 * @return string
+	 */
+	private function trim_to_serp_width( $text, $field ) {
+		$measure = $this->measure_serp_text( $text, $field, 'desktop' );
+		if ( empty( $measure['truncated'] ) ) {
+			return $text;
+		}
+		$words = explode( ' ', $text );
+		while ( count( $words ) > 1 ) {
+			array_pop( $words );
+			$candidate = implode( ' ', $words );
+			$check     = $this->measure_serp_text( $candidate, $field, 'desktop' );
+			if ( empty( $check['truncated'] ) ) {
+				return rtrim( $candidate, " ,.;:-|" );
+			}
+		}
+		return $text;
 	}
 
 	/**

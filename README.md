@@ -34,12 +34,13 @@ Engine-agnostic **SEO** (Yoast / Rank Math) · **AEO/GEO** (JSON-LD, FAQ/HowTo s
 
 - [Who it's for](#who-its-for)
 - [Why it exists](#why-it-exists)
+- [What's new in 1.4.0](#whats-new-in-140)
 - [What's new in 1.3.0](#whats-new-in-130)
 - [Architecture](#architecture)
 - [Request lifecycle (the wire)](#request-lifecycle-the-wire)
 - [Error handling](#error-handling)
 - [Capability model](#capability-model)
-- [Tool catalogue (140)](#tool-catalogue-140)
+- [Tool catalogue (162)](#tool-catalogue-162)
 - [Page-builder editing](#page-builder-editing)
 - [Commerce operations](#commerce-operations)
 - [Performance layer](#performance-layer)
@@ -75,6 +76,64 @@ You manage SEO for many clients on WordPress. The friction: an AI assistant can'
 WordPress MCP closes that loop. It turns each client site into a **remote MCP server**. You add it to Claude once per client with a single command; from then on the agent can list content, audit SEO, write meta to whichever SEO plugin the client runs, generate schema, publish optimised posts and products, control `llms.txt` / robots / redirects, and pull live Google data — all over one authenticated endpoint.
 
 **Design principle:** the core SEO/content work is always available and safe to delegate; the dangerous power (filesystem, raw SQL, user/plugin management) exists but ships **off**, behind explicit capability switches.
+
+---
+
+## What's new in 1.4.0
+
+**The agent can see**
+
+- 👁️ **`get_image_bytes`** — returns an image from the library as an actual inline picture, not a filename. Alt text written from a product name is a guess; alt text written from the photograph is not. It is also how you check the right image is on the right product. Images are downscaled and re-encoded for transfer; originals are untouched.
+
+**Every change can be taken back**
+
+- ↩️ **`undo_operation`** — bulk repricing, a site-wide search and replace, an SEO sweep, a batch: all of it was previously one-way. Now every instrumented write records the value it overwrites, the tool returns an `operation_id`, and one call puts it all back in reverse order.
+- 📜 **`list_operations`** — the last 40 write operations, what made them, how many records each touched, and whether it has already been reversed.
+- 📌 **`create_restore_point`** — snapshot the SEO fields, schema and optionally the content of a whole post type before a risky run, and get a single ID that restores the lot.
+
+**One request instead of two hundred**
+
+- 📦 **`batch`** — up to 50 tool calls in a single request. Each step reports its own result or its own error, so one failure does not lose the rest, and the whole batch reverses as **one** operation. Editing 200 products used to be 200 round trips.
+
+**Broken links and sitemaps**
+
+- 🔗 **`find_broken_links`** — crawls the links and images in your content. Internal links resolve against the database first (exact and free); the rest are requested over HTTP with redirects followed, so a link that 301s is reported as something to update rather than something broken. Results are cached for six hours and the crawl is resumable.
+- 🗺️ **`get_sitemap`** — reads the XML sitemap whether core, Yoast or Rank Math generates it, following an index into its children.
+- 🔍 **`sitemap_audit`** — the check that explains "Google indexed the wrong pages": noindexed URLs sitting in the sitemap, published content missing from it, URLs that 404 or redirect, and stale `lastmod` dates.
+- ⚡ **`indexnow_submit`** — push URLs straight to Bing, Yandex, Naver and Seznam. The verification key is generated and served at `/<key>.txt` automatically.
+
+**Knowing what happened, and what is happening**
+
+- 🧾 **`get_audit_log`** — every tool call, in order: arguments with secrets redacted, success or failure, duration, requesting IP, and the operation ID that would undo it. The error log says what broke; this says what was done.
+- ⏱️ **`get_progress`** — call it on a second connection while a long sweep is still working and it reports the tool, items done out of the total, elapsed time, and the item it is on.
+- 🛑 **A time budget** — long sweeps (`seo_audit`, `product_seo_audit`, `product_seo_fix`, `find_broken_links`, `optimize_image`, `regenerate_thumbnails`, `find_unused_media`, `batch`) now stop before PHP's execution limit and hand back a `next_offset`, instead of being killed halfway through a write.
+
+**Images that arrive the way an image should**
+
+Every route into the media library — `upload_media`, `manage_product_images`, `save_product_variation`, the new bulk tools — now runs through one ingest engine, so they all behave the same way.
+
+- 📥 **Four sources, one shape** — an existing attachment `id`, a `url` the server downloads, raw `base64` bytes (a data URI works), or a `path` to a file already on the server. No more "upload it, then attach it" two-step: Claude can hand over the bytes it is holding and get a finished product gallery back.
+- 🔤 **SEO filenames** — `IMG_2831.JPG` lands as `black-cotton-hoodie.jpg`, numbered `-2`, `-3` through the gallery. Filename is a real image-ranking signal and it was the one thing the old sideload could not control.
+- 🧬 **De-duplication** — the bytes are hashed on the way in. Re-importing the same photo across twenty products reuses one attachment instead of filling `/uploads` with twenty copies.
+- 🗜️ **Processed before storage** — `max_dimension` downscales, `convert` writes WebP or AVIF, `quality` re-encodes, all *before* the file becomes an attachment, so the library never holds the 5MB original and its eight generated sizes.
+- 🧩 **Gallery you can actually edit** — `mode` (`replace` / `append` / `prepend`), `remove_ids`, `reorder`, `detach_main`. Previously `gallery_ids` silently replaced and `gallery_urls` silently appended.
+- 🩹 **One bad URL no longer loses the batch** — each source reports its own error and everything else still saves.
+- 🎨 **`bulk_assign_variation_images`** — map an attribute value to an image (`{"red": "https://…/red.jpg"}`) and every red variation gets the red photo, ingested once and shared.
+
+**Media library maintenance**
+- 🗜️ **`optimize_image`** — downscale, convert and re-encode images already in the library, one by one or sweeping the heaviest. Keeps a restorable original, never replaces a file with a larger one, and can rewrite the old URLs in content when a conversion changes them. Dry run by default. **`restore_image`** undoes it.
+- 🔄 **`regenerate_thumbnails`** — batched, resumable, the fix after a theme switch.
+- 👯 **`find_duplicate_media`** — groups byte-identical files, names the copy actually in use, reports the wasted space.
+- 🕳️ **`find_unused_media`** — attachments nothing references (featured images, product galleries, post content and builder layouts all checked), plus rows whose file is missing from disk.
+- 🏷️ **`bulk_set_image_alt`** — alt text from a template across the whole library. Dry run by default.
+
+**Product SEO, finished**
+- 🖼️ **Social images** — `set_seo` / `get_seo` gain `og_image` and `twitter_image`. Pass an attachment ID or a URL; both the URL *and* the ID the SEO plugin needs get written, which is what makes the preview actually render.
+- 🏗️ **`generate_product_schema`** — Merchant-grade `Product` structured data: `gtin` / `mpn` / `sku`, `brand`, `priceValidUntil`, `shippingDetails`, `hasMerchantReturnPolicy`, `itemCondition`, colour / size / material, embedded reviews. Variable products become a `ProductGroup` with every variation as a `hasVariant` offer. Policy facts can be saved once and reused. `generate_schema` type=Product now routes here automatically.
+- 🩹 **`product_seo_fix`** — repairs what `product_seo_audit` reports, in bulk: missing SEO titles and meta descriptions written from the product's own facts, missing alt text, missing schema. Dry run by default.
+- 📝 **`bulk_set_seo`** — SEO titles and descriptions across any post type from a template (`{title} {separator} {site}`, `{category}`, `{brand}`, `{sku}`, `{price}`), each result checked against the pixel width Google renders.
+- 📏 **`serp_preview`** — what a page will look like in the SERP and where it gets cut. Character counts lie: `Illinois` and `MMMMMMMM` are both eight characters and one is three times wider.
+- 🔍 **`product_seo_audit`** now also flags duplicated product descriptions and missing social images.
 
 ---
 
@@ -282,11 +341,11 @@ The **Content & SEO** group is locked on — it's the reason the plugin exists. 
 
 ---
 
-## Tool catalogue (140)
+## Tool catalogue (162)
 
-**Content & SEO (36)** — `list_content`, `get_content`, `publish_content`, `update_content`, `delete_content`, `duplicate_content`, `bulk_update_content`, `search_replace_content`, `get_seo`, `set_seo`, `set_schema`, `get_schema`, `generate_schema`, `analyze_content`, `internal_link_opportunities`, `manage_llms_txt`, `manage_robots_txt`, `manage_redirects`, `seo_audit`, `list_post_types`, `list_taxonomies`, `list_terms`, `save_term`, `delete_term`, `get_meta`, `set_meta`, `delete_meta`, `upload_media`, `list_media`, `delete_media`, `set_image_alt`, `set_featured_image`, `list_revisions`, `restore_revision`, `list_comments`, `moderate_comment`
+**Content & SEO (53)** — `batch`, `list_operations`, `undo_operation`, `create_restore_point`, `find_broken_links`, `get_sitemap`, `sitemap_audit`, `indexnow_submit`, `get_image_bytes`, `list_content`, `get_content`, `publish_content`, `update_content`, `delete_content`, `duplicate_content`, `bulk_update_content`, `search_replace_content`, `get_seo`, `set_seo`, `bulk_set_seo`, `serp_preview`, `set_schema`, `get_schema`, `generate_schema`, `analyze_content`, `internal_link_opportunities`, `manage_llms_txt`, `manage_robots_txt`, `manage_redirects`, `seo_audit`, `list_post_types`, `list_taxonomies`, `list_terms`, `save_term`, `delete_term`, `get_meta`, `set_meta`, `delete_meta`, `upload_media`, `list_media`, `delete_media`, `set_image_alt`, `bulk_set_image_alt`, `set_featured_image`, `optimize_image`, `restore_image`, `regenerate_thumbnails`, `find_duplicate_media`, `find_unused_media`, `list_revisions`, `restore_revision`, `list_comments`, `moderate_comment`
 
-**WooCommerce catalogue (26)** — `list_products`, `get_product`, `create_product`, `update_product`, `delete_product`, `duplicate_product`, `bulk_update_products`, `list_product_variations`, `save_product_variation`, `delete_product_variation`, `generate_product_variations`, `list_product_attributes`, `save_product_attribute`, `list_product_categories`, `save_product_category`, `delete_product_category`, `manage_product_images`, `update_inventory`, `inventory_report`, `product_seo_audit`, `list_coupons`, `save_coupon`, `delete_coupon`, `store_report`, `get_store_settings`, `update_store_settings`
+**WooCommerce catalogue (29)** — `list_products`, `get_product`, `create_product`, `update_product`, `delete_product`, `duplicate_product`, `bulk_update_products`, `list_product_variations`, `save_product_variation`, `delete_product_variation`, `generate_product_variations`, `bulk_assign_variation_images`, `list_product_attributes`, `save_product_attribute`, `list_product_categories`, `save_product_category`, `delete_product_category`, `manage_product_images`, `update_inventory`, `inventory_report`, `product_seo_audit`, `product_seo_fix`, `generate_product_schema`, `list_coupons`, `save_coupon`, `delete_coupon`, `store_report`, `get_store_settings`, `update_store_settings`
 
 **WooCommerce orders & customers (8)** — `list_orders`, `get_order`, `update_order`, `add_order_note`, `refund_order`, `list_customers`, `get_customer`, `customer_insights`
 
@@ -298,7 +357,7 @@ The **Content & SEO** group is locked on — it's the reason the plugin exists. 
 
 **Google Site Kit (6)** — `sitekit_status`, `sitekit_search_analytics`, `sitekit_analytics_report`, `sitekit_pagespeed`, `sitekit_keyword_opportunities`, `sitekit_get`
 
-**Diagnostics (7)** — `site_info`, `site_health`, `seo_status`, `list_plugins`, `list_themes`, `mcp_status`, `get_error_log`
+**Diagnostics (9)** — `get_progress`, `get_audit_log`, `site_info`, `site_health`, `seo_status`, `list_plugins`, `list_themes`, `mcp_status`, `get_error_log`
 
 **Site Management (16)** — `install_plugin`, `activate_plugin`, `deactivate_plugin`, `update_plugin`, `delete_plugin`, `install_theme`, `switch_theme`, `delete_theme`, `get_option`, `update_option`, `delete_option`, `list_users`, `save_user`, `delete_user`, `manage_cron`, `manage_permalinks`
 
@@ -363,11 +422,19 @@ DISCOVER   list_products (search, category, type, stock, price band, on-sale, SK
            get_product   → every field, including variations, attributes, downloads, ratings
            inventory_report / store_report / product_seo_audit
 
+RANK       product_seo_fix         bulk-repair missing titles, descriptions, alt text, schema
+           generate_product_schema Product / ProductGroup JSON-LD with gtin, brand, shipping,
+                                   returns, price validity and variants
+
 BUILD      create_product          simple | variable | grouped | external
            save_product_attribute  global attribute + its terms in one call
            generate_product_variations
                                    builds every missing attribute combination, skips existing
-           manage_product_images   main image + gallery, from IDs or downloaded URLs, with alt text
+           manage_product_images   main image + gallery from attachment IDs, URLs, base64 or a
+                                   server path; SEO filenames, de-duplication, downscale/WebP,
+                                   gallery reorder and removal, per-image error reporting
+           bulk_assign_variation_images
+                                   attribute value → image, applied across every variation
 
 MERCHANDISE
            bulk_update_products    reprice by %/fixed/set across a filtered set
@@ -448,7 +515,11 @@ description            →  _yoast_wpseo_metadesc          →  rank_math_descri
 focus_keyword          →  _yoast_wpseo_focuskw           →  rank_math_focus_keyword
 canonical              →  _yoast_wpseo_canonical         →  rank_math_canonical_url
 og_title / og_desc     →  _yoast_wpseo_opengraph-*       →  rank_math_facebook_*
+og_image               →  _yoast_wpseo_opengraph-image   →  rank_math_facebook_image
+                          (+ …-image-id)                    (+ …_image_id)
 twitter_title / _desc  →  _yoast_wpseo_twitter-*         →  rank_math_twitter_*
+twitter_image          →  _yoast_wpseo_twitter-image     →  rank_math_twitter_image
+                          (+ …-image-id)                    (+ …_image_id)
 noindex / nofollow     →  _yoast_wpseo_meta-robots-*     →  rank_math_robots[]
 ```
 
@@ -458,13 +529,17 @@ noindex / nofollow     →  _yoast_wpseo_meta-robots-*     →  rank_math_robots
 
 All writes pass through `sanitize_text_field`. The same normalisation covers **terms** (category/tag SEO) and **WooCommerce products**.
 
+The image fields accept either an attachment ID or a URL and always write **both** the URL and the attachment ID — a social image set with only one of the pair is the usual reason a preview silently fails to render.
+
+`bulk_set_seo` applies templates across a whole post type, and `serp_preview` measures the result in rendered pixels rather than characters, since Google truncates on width.
+
 ---
 
 ## AEO / GEO layer
 
 Answer-Engine and Generative-Engine optimisation, managed by the agent and rendered by `WPMCP_Frontend`:
 
-- **JSON-LD schema** — stored per post in `_wpmcp_jsonld`, validated on write, emitted in `wp_head` on singular views. Output is hex-escaped (`JSON_HEX_TAG|HEX_AMP|HEX_QUOT|HEX_APOS`) so a string value can never break out of the `<script>` element. `generate_schema` builds Article/FAQPage/HowTo/BreadcrumbList/Product JSON-LD straight from post data.
+- **JSON-LD schema** — stored per post in `_wpmcp_jsonld`, validated on write, emitted in `wp_head` on singular views. Output is hex-escaped (`JSON_HEX_TAG|HEX_AMP|HEX_QUOT|HEX_APOS`) so a string value can never break out of the `<script>` element. `generate_schema` builds Article/FAQPage/HowTo/BreadcrumbList/Product JSON-LD straight from post data; for a real WooCommerce product it hands off to `WPMCP_Schema`, which emits the full `Product` / `ProductGroup` object — identifiers, brand, variants, price validity, shipping and return policy — and reports what is still missing for Merchant Center.
 - **`llms.txt`** — a single site-wide document served at `/llms.txt` (`text/plain`) via a rewrite rule, managed with `manage_llms_txt`. Tells generative engines what the site is and how to use it.
 - **`robots.txt` control** — `manage_robots_txt` appends managed directives to the virtual robots.txt, including explicit allow/deny for AI crawlers (GPTBot, ClaudeBot, Google-Extended, PerplexityBot, CCBot, …) — the GEO crawl-control surface.
 - **Redirects** — `manage_redirects` stores 301/302/307/308 rules served early on `template_redirect` via `wp_safe_redirect`, so reorganised content keeps its link equity.

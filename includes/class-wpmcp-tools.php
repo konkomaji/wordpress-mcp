@@ -18,6 +18,9 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 require_once WPMCP_DIR . 'includes/tools/trait-wpmcp-content.php';
+require_once WPMCP_DIR . 'includes/tools/trait-wpmcp-ops.php';
+require_once WPMCP_DIR . 'includes/tools/trait-wpmcp-seotech.php';
+require_once WPMCP_DIR . 'includes/tools/trait-wpmcp-media.php';
 require_once WPMCP_DIR . 'includes/tools/trait-wpmcp-woocommerce.php';
 require_once WPMCP_DIR . 'includes/tools/trait-wpmcp-orders.php';
 require_once WPMCP_DIR . 'includes/tools/trait-wpmcp-performance.php';
@@ -34,6 +37,9 @@ require_once WPMCP_DIR . 'includes/tools/trait-wpmcp-database.php';
 class WPMCP_Tools {
 
 	use WPMCP_Content_Tools;
+	use WPMCP_Ops_Tools;
+	use WPMCP_SEOTech_Tools;
+	use WPMCP_Media_Tools;
 	use WPMCP_WooCommerce_Tools;
 	use WPMCP_Orders_Tools;
 	use WPMCP_Performance_Tools;
@@ -52,6 +58,15 @@ class WPMCP_Tools {
 	private $catalogue = null;
 
 	/**
+	 * Nesting depth of dispatch(). The batch tool runs other tools, and only
+	 * the outermost call owns the audit entry, the undo journal and the
+	 * progress heartbeat.
+	 *
+	 * @var int
+	 */
+	private $depth = 0;
+
+	/**
 	 * Full tool catalogue, each entry tagged with its capability group.
 	 *
 	 * @return array<int,array>
@@ -60,6 +75,9 @@ class WPMCP_Tools {
 		if ( null === $this->catalogue ) {
 			$this->catalogue = array_merge(
 				$this->defs_content(),
+				$this->defs_ops(),
+				$this->defs_seotech(),
+				$this->defs_media(),
 				$this->defs_woocommerce(),
 				$this->defs_orders(),
 				$this->defs_performance(),
@@ -147,6 +165,12 @@ class WPMCP_Tools {
 	 * @throws WPMCP_Tool_Exception On unknown tool, disabled group, bad arguments, or handler error.
 	 */
 	public function dispatch( $name, $args ) {
+		$outermost = ( 0 === $this->depth );
+		$started   = microtime( true );
+		if ( $outermost ) {
+			WPMCP_Progress::boot( $name );
+		}
+
 		// Pre-flight rejections (unknown tool, disabled group, bad arguments)
 		// are logged too — they are the failures someone is most likely to be
 		// asking "why did that call not work?" about afterwards.
@@ -162,6 +186,7 @@ class WPMCP_Tools {
 					'stage'   => 'pre-flight',
 				]
 			);
+			WPMCP_Audit::record( $name, $args, 'rejected', microtime( true ) - $started, [ 'code' => $e->get_error_code() ] );
 			throw $e;
 		}
 
@@ -174,9 +199,17 @@ class WPMCP_Tools {
 
 		$method = $this->registry()[ $name ]['handler'];
 
+		// Only the outer call records an undoable operation: a batch of writes
+		// should be reversible as one thing, not twenty.
+		if ( $outermost && ! WPMCP_Audit::is_read_only( $name ) ) {
+			WPMCP_Journal::open( $name, $args );
+		}
+
 		WPMCP_Errors::begin( $name );
+		$this->depth++;
 		try {
 			$result   = $this->{$method}( $args );
+			$this->depth--;
 			$warnings = WPMCP_Errors::end();
 
 			// Surface PHP notices raised by a tool that still succeeded: a
@@ -184,9 +217,28 @@ class WPMCP_Tools {
 			if ( $warnings && is_array( $result ) ) {
 				$result['_warnings'] = $warnings;
 			}
+			if ( $outermost ) {
+				WPMCP_Progress::finish();
+				$operation = WPMCP_Journal::is_open() ? WPMCP_Journal::close( $this->result_summary( $result ) ) : '';
+				if ( $operation && is_array( $result ) ) {
+					// Tell the client, in the result it is already reading,
+					// exactly how to take this change back.
+					$result['operation_id'] = $operation;
+					$result['undo_with']    = sprintf( 'undo_operation id=%s', $operation );
+				}
+				WPMCP_Audit::record( $name, $args, 'ok', microtime( true ) - $started, [ 'operation_id' => $operation, 'result' => $this->result_summary( $result ) ] );
+			}
 			return $result;
 		} catch ( WPMCP_Tool_Exception $e ) {
+			$this->depth--;
 			$warnings = WPMCP_Errors::end();
+			if ( $outermost ) {
+				WPMCP_Progress::finish();
+				// A half-finished write is exactly what someone wants to undo,
+				// so the journal is kept rather than discarded.
+				$operation = WPMCP_Journal::is_open() ? WPMCP_Journal::close( [ 'failed' => true ] ) : '';
+				WPMCP_Audit::record( $name, $args, 'error', microtime( true ) - $started, [ 'code' => $e->get_error_code(), 'operation_id' => $operation ] );
+			}
 			WPMCP_Errors::log(
 				[
 					'tool'     => $name,
@@ -201,7 +253,13 @@ class WPMCP_Tools {
 			// Anything a handler did not anticipate — a TypeError inside a
 			// third-party hook, a division by zero — becomes a typed error
 			// instead of a 500 the client cannot interpret.
+			$this->depth--;
 			$warnings = WPMCP_Errors::end();
+			if ( $outermost ) {
+				WPMCP_Progress::finish();
+				$operation = WPMCP_Journal::is_open() ? WPMCP_Journal::close( [ 'failed' => true ] ) : '';
+				WPMCP_Audit::record( $name, $args, 'error', microtime( true ) - $started, [ 'code' => WPMCP_Errors::TOOL_FAILED, 'operation_id' => $operation ] );
+			}
 			WPMCP_Errors::log(
 				[
 					'tool'     => $name,
@@ -224,6 +282,36 @@ class WPMCP_Tools {
 				]
 			);
 		}
+	}
+
+	/**
+	 * A few headline numbers from a tool's result, for the operation list.
+	 *
+	 * @param mixed $result Tool result.
+	 * @return array
+	 */
+	private function result_summary( $result ) {
+		if ( ! is_array( $result ) ) {
+			return [];
+		}
+		$out = [];
+		foreach ( [ 'changed', 'written', 'applied', 'updated', 'count', 'matched', 'assigned', 'regenerated', 'saved_bytes', 'dry_run', 'steps', 'succeeded', 'failed', 'submitted', 'broken_count' ] as $key ) {
+			if ( isset( $result[ $key ] ) && is_scalar( $result[ $key ] ) ) {
+				$out[ $key ] = $result[ $key ];
+			}
+		}
+		return $out;
+	}
+
+	/**
+	 * Whether a tool exists and is callable right now. Used by batch to fail a
+	 * single step cleanly rather than aborting the whole run.
+	 *
+	 * @param string $name Tool name.
+	 * @return bool
+	 */
+	public function has_tool( $name ) {
+		return isset( $this->registry()[ $name ] );
 	}
 
 	/**

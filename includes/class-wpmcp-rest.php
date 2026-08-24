@@ -252,6 +252,9 @@ class WPMCP_REST {
 			'Start with site_info and mcp_status to see the stack and which capability groups are enabled.',
 			'Errors come back as JSON with a "code" and usually a "hint" — read the hint before retrying.',
 			'Destructive and site-wide tools (bulk_update_products, search_replace_content, optimize_site, database_cleanup, update_inventory by category) default to dry_run=true. Review the preview, then repeat the call with dry_run=false.',
+			'Writes are journalled: a tool that changed something returns an operation_id, and undo_operation reverses it. list_operations shows what can still be taken back, and create_restore_point snapshots a set of posts before a risky run.',
+			'Use batch to run up to 50 tool calls in one request instead of many round trips; the whole batch undoes as a single operation.',
+			'Long sweeps stop before the execution limit and return next_offset — call again with it. get_progress reports how far a run has got while it is still working.',
 		];
 		if ( class_exists( 'WooCommerce' ) ) {
 			$lines[] = 'WooCommerce is active: use list_products/get_product/update_product for the catalogue, and generate_product_variations for variable products.';
@@ -283,6 +286,16 @@ class WPMCP_REST {
 
 		try {
 			$data = $this->tools->dispatch( $name, $args );
+
+			// A tool may hand back native MCP content blocks — an image, say —
+			// alongside its JSON. get_image_bytes uses this so the model can
+			// actually look at the picture instead of reading base64.
+			$blocks = [];
+			if ( is_array( $data ) && ! empty( $data['_mcp_content'] ) && is_array( $data['_mcp_content'] ) ) {
+				$blocks = $data['_mcp_content'];
+				unset( $data['_mcp_content'] );
+			}
+
 			$text = wp_json_encode( $data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE );
 			if ( false === $text ) {
 				// Almost always invalid UTF-8 from a legacy database column.
@@ -295,17 +308,12 @@ class WPMCP_REST {
 					JSON_PRETTY_PRINT
 				);
 			}
-			return $this->result(
-				$id,
-				[
-					'content' => [
-						[
-							'type' => 'text',
-							'text' => $text,
-						],
-					],
-				]
-			);
+			$blocks[] = [
+				'type' => 'text',
+				'text' => $text,
+			];
+
+			return $this->result( $id, [ 'content' => array_values( $blocks ) ] );
 		} catch ( Throwable $e ) {
 			// Tool-level errors are reported inside result with isError, per MCP.
 			// The body is structured JSON so the client can branch on `code`

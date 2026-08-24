@@ -25,13 +25,13 @@ class WPMCP_Settings {
 		return [
 			'content'     => [
 				'label'   => __( 'Content & SEO', 'wordpress-mcp' ),
-				'desc'    => __( 'Read/write posts, pages, custom post types, taxonomy terms, media, meta, JSON-LD schema, and llms.txt. Engine-agnostic Yoast / RankMath SEO fields. This is the core of the plugin.', 'wordpress-mcp' ),
+				'desc'    => __( 'Read/write posts, pages, custom post types, taxonomy terms, meta, JSON-LD schema, and llms.txt. Engine-agnostic Yoast / RankMath SEO fields including social images, bulk SEO templating and SERP pixel previews. Full media library management: upload from URL, base64 or a server path, view an image inline, optimise and convert images, regenerate thumbnails, and find duplicate or orphaned files. Broken-link checking, sitemap auditing and IndexNow submission. Also holds the safety layer every group depends on: batching, the undo journal and restore points. This is the core of the plugin.', 'wordpress-mcp' ),
 				'default' => true,
 				'locked'  => true,
 			],
 			'woocommerce' => [
 				'label'   => __( 'WooCommerce catalogue', 'wordpress-mcp' ),
-				'desc'    => __( 'Full product management: create/update/delete products, variations, attributes, categories, images, pricing and bulk repricing, inventory, coupons, store settings, and product SEO.', 'wordpress-mcp' ),
+				'desc'    => __( 'Full product management: create/update/delete products, variations, attributes, categories, pricing and bulk repricing, inventory, coupons, and store settings. Product and variation images from any source with SEO filenames and de-duplication. Product SEO: auditing, bulk repair, and Merchant-grade Product / ProductGroup structured data.', 'wordpress-mcp' ),
 				'default' => true,
 			],
 			'wc_orders'   => [
@@ -61,7 +61,7 @@ class WPMCP_Settings {
 			],
 			'diagnostics' => [
 				'label'   => __( 'Diagnostics', 'wordpress-mcp' ),
-				'desc'    => __( 'Read-only site health, environment, plugin/theme inventory, and SEO engine status.', 'wordpress-mcp' ),
+				'desc'    => __( 'Read-only site health, environment, plugin/theme inventory, SEO engine status, live progress of a running tool, and the audit log of every call this server has made.', 'wordpress-mcp' ),
 				'default' => true,
 			],
 			'site_mgmt'   => [
