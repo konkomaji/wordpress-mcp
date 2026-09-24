@@ -193,7 +193,7 @@ class WPMCP_Schema {
 		}
 
 		if ( ! isset( $opts['shipping'] ) ) {
-			$warnings[] = 'No shipping policy given. Merchant Center free listings want shippingDetails — pass shipping={ rate, country, transit_days_min, transit_days_max }, or set it once with save_defaults=true.';
+			$warnings[] = 'No shipping policy given. Merchant Center free listings want shippingDetails. Pass shipping={ rate, country, transit_days_min, transit_days_max }, or set it once with save_defaults=true.';
 		}
 		if ( ! isset( $opts['returns'] ) ) {
 			$warnings[] = 'No return policy given. Pass returns={ days, country, fees } so hasMerchantReturnPolicy can be written.';

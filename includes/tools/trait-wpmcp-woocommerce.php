@@ -4,8 +4,8 @@
  * update, delete, duplicate, bulk), variations and attributes, categories,
  * images, inventory, coupons, store settings, and reporting.
  *
- * Order and customer data lives in a separate capability group — see
- * trait-wpmcp-orders.php — because it is personal data and money movement.
+ * Order and customer data lives in a separate capability group (see
+ * trait-wpmcp-orders.php) because it is personal data and money movement.
  *
  * @package WordPressMCP
  */
@@ -112,11 +112,11 @@ trait WPMCP_WooCommerce_Tools {
 			[
 				'group'       => 'woocommerce',
 				'name'        => 'bulk_update_products',
-				'description' => 'Apply one change across many products at once — the core of catalogue-wide merchandising. Adjust prices by percentage or fixed amount (regular or sale), start/end a sale, set stock status or quantity, change status/visibility/featured, add or remove categories/tags, or set a tax/shipping class. Target by ids or by a category/type/status query. DRY RUN BY DEFAULT.',
+				'description' => 'Apply one change across many products at once: the core of catalogue-wide merchandising. Adjust prices by percentage or fixed amount (regular or sale), start/end a sale, set stock status or quantity, change status/visibility/featured, add or remove categories/tags, or set a tax/shipping class. Target by ids or by a category/type/status query. DRY RUN BY DEFAULT.',
 				'inputSchema' => [
 					'type'       => 'object',
 					'properties' => [
-						'ids'             => [ 'type' => 'array', 'description' => 'Explicit product IDs. Takes precedence over the filters.' ],
+						'ids'             => [ 'type' => 'array', 'items' => [ 'type' => 'integer' ], 'description' => 'Explicit product IDs. Takes precedence over the filters.' ],
 						'category'        => [ 'type' => 'string', 'description' => 'Filter: product_cat slug.' ],
 						'tag'             => [ 'type' => 'string', 'description' => 'Filter: product_tag slug.' ],
 						'type'            => [ 'type' => 'string', 'description' => 'Filter: product type.' ],
@@ -129,10 +129,10 @@ trait WPMCP_WooCommerce_Tools {
 						'sale_from'       => [ 'type' => 'string', 'description' => 'Sale start date (with a sale price).' ],
 						'sale_to'         => [ 'type' => 'string', 'description' => 'Sale end date.' ],
 						'set'             => [ 'type' => 'object', 'description' => 'Direct field writes: status, catalog_visibility, featured, stock_status, stock_quantity, manage_stock, backorders, tax_class, tax_status, shipping_class, purchase_note, reviews_allowed, menu_order.' ],
-						'add_categories'  => [ 'type' => 'array', 'description' => 'Category slugs/ids to append.' ],
-						'remove_categories' => [ 'type' => 'array', 'description' => 'Category slugs/ids to remove.' ],
-						'add_tags'        => [ 'type' => 'array' ],
-						'remove_tags'     => [ 'type' => 'array' ],
+						'add_categories'  => [ 'type' => 'array', 'items' => [ 'type' => 'string' ], 'description' => 'Category slugs/ids to append.' ],
+						'remove_categories' => [ 'type' => 'array', 'items' => [ 'type' => 'string' ], 'description' => 'Category slugs/ids to remove.' ],
+						'add_tags'        => [ 'type' => 'array', 'items' => [ 'type' => 'string' ] ],
+						'remove_tags'     => [ 'type' => 'array', 'items' => [ 'type' => 'string' ] ],
 						'include_variations' => [ 'type' => 'boolean', 'description' => 'Also apply pricing/stock changes to each variation. Default true.' ],
 						'dry_run'         => [ 'type' => 'boolean', 'description' => 'Default TRUE. Set false to write.' ],
 					],
@@ -243,7 +243,7 @@ trait WPMCP_WooCommerce_Tools {
 					'properties' => [
 						'name'         => [ 'type' => 'string', 'description' => 'Human label, e.g. "Colour".' ],
 						'slug'         => [ 'type' => 'string', 'description' => 'Attribute slug without the pa_ prefix. Derived from name when omitted.' ],
-						'terms'        => [ 'type' => 'array', 'description' => 'Term names to ensure exist, e.g. ["Red","Blue"].' ],
+						'terms'        => [ 'type' => 'array', 'items' => [ 'type' => 'string' ], 'description' => 'Term names to ensure exist, e.g. ["Red","Blue"].' ],
 						'type'         => [ 'type' => 'string', 'description' => 'select|text. Default select.' ],
 						'order_by'     => [ 'type' => 'string', 'description' => 'menu_order|name|name_num|id. Default menu_order.' ],
 						'has_archives' => [ 'type' => 'boolean' ],
@@ -301,10 +301,10 @@ trait WPMCP_WooCommerce_Tools {
 					'properties' => [
 						'product_id'        => [ 'type' => 'integer' ],
 						'main'              => [ 'type' => 'object', 'description' => 'Main product image. Keys: id | url | base64 | path, plus filename, alt, title, caption, description.' ],
-						'gallery'           => [ 'type' => 'array', 'description' => 'Gallery images, in the order they should appear. Each item is either an attachment ID, a URL string, or the same object shape as main.' ],
+						'gallery'           => [ 'type' => 'array', 'items' => [ 'type' => 'object', 'properties' => [ 'id' => [ 'type' => 'integer' ], 'url' => [ 'type' => 'string' ], 'base64' => [ 'type' => 'string' ], 'path' => [ 'type' => 'string' ], 'filename' => [ 'type' => 'string' ], 'alt' => [ 'type' => 'string' ], 'title' => [ 'type' => 'string' ], 'caption' => [ 'type' => 'string' ], 'description' => [ 'type' => 'string' ] ] ], 'description' => 'Gallery images, in the order they should appear. Each item is either an attachment ID, a URL string, or the same object shape as main.' ],
 						'mode'              => [ 'type' => 'string', 'description' => 'How gallery combines with what is already there: replace (default), append, or prepend.' ],
-						'remove_ids'        => [ 'type' => 'array', 'description' => 'Attachment IDs to drop from the gallery.' ],
-						'reorder'           => [ 'type' => 'array', 'description' => 'Attachment IDs in the exact order wanted. Applied after everything else.' ],
+						'remove_ids'        => [ 'type' => 'array', 'items' => [ 'type' => 'integer' ], 'description' => 'Attachment IDs to drop from the gallery.' ],
+						'reorder'           => [ 'type' => 'array', 'items' => [ 'type' => 'integer' ], 'description' => 'Attachment IDs in the exact order wanted. Applied after everything else.' ],
 						'detach_main'       => [ 'type' => 'boolean', 'description' => 'Remove the main image entirely.' ],
 						'seo_filenames'     => [ 'type' => 'boolean', 'description' => 'Rename incoming files after the product, e.g. black-cotton-hoodie-2.jpg. Default true.' ],
 						'auto_alt'          => [ 'type' => 'boolean', 'description' => 'Fill any missing alt text with the product name. Default true.' ],
@@ -315,10 +315,10 @@ trait WPMCP_WooCommerce_Tools {
 						'continue_on_error' => [ 'type' => 'boolean', 'description' => 'Keep going when one source fails and report it. Default true.' ],
 						'image_id'          => [ 'type' => 'integer', 'description' => 'Legacy: attachment ID for the main image.' ],
 						'image_url'         => [ 'type' => 'string', 'description' => 'Legacy: URL for the main image.' ],
-						'gallery_ids'       => [ 'type' => 'array', 'description' => 'Legacy: attachment IDs, replacing the gallery.' ],
-						'gallery_urls'      => [ 'type' => 'array', 'description' => 'Legacy: URLs appended to the gallery.' ],
+						'gallery_ids'       => [ 'type' => 'array', 'items' => [ 'type' => 'integer' ], 'description' => 'Legacy: attachment IDs, replacing the gallery.' ],
+						'gallery_urls'      => [ 'type' => 'array', 'items' => [ 'type' => 'string' ], 'description' => 'Legacy: URLs appended to the gallery.' ],
 						'alt'               => [ 'type' => 'string', 'description' => 'Legacy: alt text for the main image.' ],
-						'gallery_alts'      => [ 'type' => 'array', 'description' => 'Legacy: alt text per gallery image, in order.' ],
+						'gallery_alts'      => [ 'type' => 'array', 'items' => [ 'type' => 'string' ], 'description' => 'Legacy: alt text per gallery image, in order.' ],
 					],
 					'required'   => [ 'product_id' ],
 				],
@@ -330,8 +330,8 @@ trait WPMCP_WooCommerce_Tools {
 				'inputSchema' => [
 					'type'       => 'object',
 					'properties' => [
-						'items'          => [ 'type' => 'array', 'description' => 'Per-item updates: [{id, quantity, stock_status, sku}]. id may be a product or variation.' ],
-						'ids'            => [ 'type' => 'array', 'description' => 'Apply the same settings to these product/variation IDs.' ],
+						'items'          => [ 'type' => 'array', 'items' => [ 'type' => 'object', 'properties' => [ 'id' => [ 'type' => 'integer' ], 'sku' => [ 'type' => 'string' ], 'quantity' => [ 'type' => 'integer' ], 'stock_quantity' => [ 'type' => 'integer' ], 'adjust_by' => [ 'type' => 'integer' ], 'stock_status' => [ 'type' => 'string' ], 'manage_stock' => [ 'type' => 'boolean' ], 'backorders' => [ 'type' => 'string' ], 'low_stock_amount' => [ 'type' => 'integer' ] ] ], 'description' => 'Per-item updates: [{id, quantity, stock_status, sku}]. id may be a product or variation.' ],
+						'ids'            => [ 'type' => 'array', 'items' => [ 'type' => 'integer' ], 'description' => 'Apply the same settings to these product/variation IDs.' ],
 						'category'       => [ 'type' => 'string', 'description' => 'Instead of ids: every product in this category slug.' ],
 						'adjust_by'      => [ 'type' => 'integer', 'description' => 'Add (or subtract) this amount from current stock.' ],
 						'stock_quantity' => [ 'type' => 'integer', 'description' => 'Set an absolute quantity.' ],
@@ -374,7 +374,7 @@ trait WPMCP_WooCommerce_Tools {
 					'type'       => 'object',
 					'properties' => [
 						'product_id'       => [ 'type' => 'integer', 'description' => 'A single product.' ],
-						'ids'              => [ 'type' => 'array', 'description' => 'Several products.' ],
+						'ids'              => [ 'type' => 'array', 'items' => [ 'type' => 'integer' ], 'description' => 'Several products.' ],
 						'all'              => [ 'type' => 'boolean', 'description' => 'Walk every published product instead.' ],
 						'limit'            => [ 'type' => 'integer', 'description' => 'With all: products per run. Default 50, max 500.' ],
 						'offset'           => [ 'type' => 'integer', 'description' => 'With all: where to resume. Default 0.' ],
@@ -400,8 +400,8 @@ trait WPMCP_WooCommerce_Tools {
 				'inputSchema' => [
 					'type'       => 'object',
 					'properties' => [
-						'fix'                  => [ 'type' => 'array', 'description' => 'What to repair: seo_title, meta_description, image_alt, schema, focus_keyword. Default: seo_title, meta_description, image_alt.' ],
-						'ids'                  => [ 'type' => 'array', 'description' => 'Specific product IDs. Omit to walk published products.' ],
+						'fix'                  => [ 'type' => 'array', 'items' => [ 'type' => 'string' ], 'description' => 'What to repair: seo_title, meta_description, image_alt, schema, focus_keyword. Default: seo_title, meta_description, image_alt.' ],
+						'ids'                  => [ 'type' => 'array', 'items' => [ 'type' => 'integer' ], 'description' => 'Specific product IDs. Omit to walk published products.' ],
 						'title_template'       => [ 'type' => 'string', 'description' => 'Default "{title} {separator} {site}". Placeholders: {title} {category} {brand} {sku} {price} {site} {tagline} {separator}.' ],
 						'description_template' => [ 'type' => 'string', 'description' => 'Omit to write a description from the product\'s short description, trimmed to fit.' ],
 						'separator'            => [ 'type' => 'string', 'description' => 'What {separator} renders as. Default |.' ],
@@ -442,10 +442,10 @@ trait WPMCP_WooCommerce_Tools {
 						'free_shipping'        => [ 'type' => 'boolean' ],
 						'minimum_amount'       => [ 'type' => 'string' ],
 						'maximum_amount'       => [ 'type' => 'string' ],
-						'product_ids'          => [ 'type' => 'array' ],
-						'excluded_product_ids' => [ 'type' => 'array' ],
-						'product_categories'   => [ 'type' => 'array', 'description' => 'Category IDs the coupon applies to.' ],
-						'excluded_product_categories' => [ 'type' => 'array' ],
+						'product_ids'          => [ 'type' => 'array', 'items' => [ 'type' => 'integer' ] ],
+						'excluded_product_ids' => [ 'type' => 'array', 'items' => [ 'type' => 'integer' ] ],
+						'product_categories'   => [ 'type' => 'array', 'items' => [ 'type' => 'integer' ], 'description' => 'Category IDs the coupon applies to.' ],
+						'excluded_product_categories' => [ 'type' => 'array', 'items' => [ 'type' => 'integer' ] ],
 						'exclude_sale_items'   => [ 'type' => 'boolean' ],
 					],
 				],
@@ -483,7 +483,7 @@ trait WPMCP_WooCommerce_Tools {
 			[
 				'group'       => 'woocommerce',
 				'name'        => 'update_store_settings',
-				'description' => 'Update store configuration. Only a safe, explicit whitelist of WooCommerce settings can be written (currency, address, units, stock thresholds and notifications, catalogue behaviour, review options, tax display) — payment gateway credentials and similar are deliberately not writable here.',
+				'description' => 'Update store configuration. Only a safe, explicit whitelist of WooCommerce settings can be written (currency, address, units, stock thresholds and notifications, catalogue behaviour, review options, tax display); payment gateway credentials and similar are deliberately not writable here.',
 				'inputSchema' => [
 					'type'       => 'object',
 					'properties' => [
@@ -531,18 +531,18 @@ trait WPMCP_WooCommerce_Tools {
 			'shipping_class'    => [ 'type' => 'string', 'description' => 'Shipping class slug.' ],
 			'virtual'           => [ 'type' => 'boolean' ],
 			'downloadable'      => [ 'type' => 'boolean' ],
-			'downloads'         => [ 'type' => 'array', 'description' => 'Array of {name, file} for downloadable products.' ],
+			'downloads'         => [ 'type' => 'array', 'items' => [ 'type' => 'object', 'properties' => [ 'name' => [ 'type' => 'string' ], 'file' => [ 'type' => 'string' ] ] ], 'description' => 'Array of {name, file} for downloadable products.' ],
 			'download_limit'    => [ 'type' => 'integer' ],
 			'download_expiry'   => [ 'type' => 'integer' ],
-			'categories'        => [ 'type' => 'array', 'description' => 'Category names, slugs, or IDs.' ],
-			'tags'              => [ 'type' => 'array', 'description' => 'Tag names, slugs, or IDs.' ],
-			'attributes'        => [ 'type' => 'array', 'description' => 'Array of {name, options[], visible, variation}. Use a global attribute slug (e.g. "pa_color") or a free-text name for a custom attribute.' ],
+			'categories'        => [ 'type' => 'array', 'items' => [ 'type' => 'string' ], 'description' => 'Category names, slugs, or IDs.' ],
+			'tags'              => [ 'type' => 'array', 'items' => [ 'type' => 'string' ], 'description' => 'Tag names, slugs, or IDs.' ],
+			'attributes'        => [ 'type' => 'array', 'items' => [ 'type' => 'object', 'properties' => [ 'name' => [ 'type' => 'string' ], 'options' => [ 'type' => 'array', 'items' => [ 'type' => 'string' ] ], 'visible' => [ 'type' => 'boolean' ], 'variation' => [ 'type' => 'boolean' ] ] ], 'description' => 'Array of {name, options[], visible, variation}. Use a global attribute slug (e.g. "pa_color") or a free-text name for a custom attribute.' ],
 			'default_attributes'=> [ 'type' => 'object', 'description' => 'Map attribute name => default value, for variable products.' ],
 			'image_id'          => [ 'type' => 'integer', 'description' => 'Main image attachment ID.' ],
-			'gallery_ids'       => [ 'type' => 'array', 'description' => 'Gallery attachment IDs.' ],
-			'upsell_ids'        => [ 'type' => 'array' ],
-			'cross_sell_ids'    => [ 'type' => 'array' ],
-			'grouped_products'  => [ 'type' => 'array', 'description' => 'Child product IDs for a grouped product.' ],
+			'gallery_ids'       => [ 'type' => 'array', 'items' => [ 'type' => 'integer' ], 'description' => 'Gallery attachment IDs.' ],
+			'upsell_ids'        => [ 'type' => 'array', 'items' => [ 'type' => 'integer' ] ],
+			'cross_sell_ids'    => [ 'type' => 'array', 'items' => [ 'type' => 'integer' ] ],
+			'grouped_products'  => [ 'type' => 'array', 'items' => [ 'type' => 'integer' ], 'description' => 'Child product IDs for a grouped product.' ],
 			'external_url'      => [ 'type' => 'string', 'description' => 'For external/affiliate products.' ],
 			'button_text'       => [ 'type' => 'string' ],
 			'purchase_note'     => [ 'type' => 'string' ],
@@ -920,6 +920,7 @@ trait WPMCP_WooCommerce_Tools {
 		$product = new $class();
 		$this->apply_product_fields( $product, $args );
 		$id = $this->save_wc_object( $product, 'product' );
+		WPMCP_Journal::note( sprintf( 'Product %d created by create_product is not deleted by undo. Use delete_product.', $id ) );
 
 		if ( ! empty( $args['seo'] ) && is_array( $args['seo'] ) ) {
 			WPMCP_SEO::set_post_seo( $id, $args['seo'] );
@@ -940,8 +941,13 @@ trait WPMCP_WooCommerce_Tools {
 	private function tool_update_product( $args ) {
 		$product = $this->get_wc_product( (int) $args['id'], false );
 
+		// Snapshot every field this call is about to change, through the CRUD
+		// getters, before anything is written.
+		$this->journal_product_args( $product->get_id(), $args );
+
 		// Changing type requires rebuilding the object as the new class.
 		if ( ! empty( $args['type'] ) && $args['type'] !== $product->get_type() ) {
+			WPMCP_Journal::note( sprintf( 'The product type change on product %d is not reversed by undo.', $product->get_id() ) );
 			wp_set_object_terms( $product->get_id(), sanitize_key( $args['type'] ), 'product_type' );
 			$product = wc_get_product( $product->get_id() );
 		}
@@ -950,6 +956,7 @@ trait WPMCP_WooCommerce_Tools {
 		$id = $this->save_wc_object( $product, 'product' );
 
 		if ( ! empty( $args['seo'] ) && is_array( $args['seo'] ) ) {
+			WPMCP_Journal::post_seo( $id );
 			WPMCP_SEO::set_post_seo( $id, $args['seo'] );
 		}
 		return [
@@ -957,6 +964,65 @@ trait WPMCP_WooCommerce_Tools {
 			'id'      => $id,
 			'product' => $this->product_payload( wc_get_product( $id ) ),
 		];
+	}
+
+	/**
+	 * Record the current value of every product field an update is about to
+	 * write, so undo_operation can put it back through WooCommerce's setters.
+	 * Fields that hold objects (attributes, downloads) have no record type and
+	 * are noted instead.
+	 *
+	 * @param int   $product_id Product or variation ID.
+	 * @param array $args       Incoming update arguments.
+	 */
+	private function journal_product_args( $product_id, $args ) {
+		if ( ! WPMCP_Journal::is_open() ) {
+			return;
+		}
+		// Argument name => CRUD field name (get_{field} / set_{field}).
+		$renamed = [
+			'shipping_class'   => 'shipping_class_id',
+			'external_url'     => 'product_url',
+			'sale_from'        => 'date_on_sale_from',
+			'sale_to'          => 'date_on_sale_to',
+			'gallery_ids'      => 'gallery_image_ids',
+			'grouped_products' => 'children',
+			'categories'       => 'category_ids',
+			'tags'             => 'tag_ids',
+			'enabled'          => 'status',
+			'image'            => 'image_id',
+		];
+		$same    = [ 'name', 'slug', 'status', 'catalog_visibility', 'description', 'short_description', 'sku', 'regular_price', 'sale_price', 'tax_status', 'tax_class', 'stock_status', 'backorders', 'weight', 'length', 'width', 'height', 'purchase_note', 'button_text', 'featured', 'manage_stock', 'sold_individually', 'virtual', 'downloadable', 'reviews_allowed', 'stock_quantity', 'low_stock_amount', 'download_limit', 'download_expiry', 'menu_order', 'image_id', 'upsell_ids', 'cross_sell_ids', 'default_attributes' ];
+
+		$fields = [];
+		foreach ( $args as $key => $unused ) {
+			if ( in_array( $key, $same, true ) ) {
+				$fields[] = $key;
+			} elseif ( isset( $renamed[ $key ] ) ) {
+				$fields[] = $renamed[ $key ];
+			}
+		}
+		$product = wc_get_product( (int) $product_id );
+		if ( isset( $args['attributes'] ) ) {
+			// A variation's attributes are plain strings; a parent product's are
+			// WC_Product_Attribute objects, which the journal cannot store.
+			if ( $product && $product->is_type( 'variation' ) ) {
+				$fields[] = 'attributes';
+			} else {
+				WPMCP_Journal::note( sprintf( 'Attribute changes on product %d are not restored by undo.', (int) $product_id ) );
+			}
+		}
+		if ( isset( $args['downloads'] ) ) {
+			WPMCP_Journal::note( sprintf( 'Downloadable file changes on product %d are not restored by undo.', (int) $product_id ) );
+		}
+		if ( $fields ) {
+			WPMCP_Journal::product( (int) $product_id, array_values( array_unique( $fields ) ) );
+		}
+		if ( ! empty( $args['meta'] ) && is_array( $args['meta'] ) ) {
+			foreach ( array_keys( $args['meta'] ) as $key ) {
+				WPMCP_Journal::post_meta( (int) $product_id, (string) $key );
+			}
+		}
 	}
 
 	/**
@@ -1155,7 +1221,7 @@ trait WPMCP_WooCommerce_Tools {
 						$term = get_term_by( 'name', $option, $taxonomy );
 					}
 					if ( ! $term ) {
-						$created = wp_insert_term( (string) $option, $taxonomy );
+						$created = wp_insert_term( wp_slash( (string) $option ), $taxonomy );
 						if ( ! is_wp_error( $created ) ) {
 							$term_ids[] = (int) $created['term_id'];
 						}
@@ -1219,7 +1285,7 @@ trait WPMCP_WooCommerce_Tools {
 				continue;
 			}
 			if ( $create ) {
-				$created = wp_insert_term( (string) $value, $taxonomy );
+				$created = wp_insert_term( wp_slash( (string) $value ), $taxonomy );
 				if ( ! is_wp_error( $created ) ) {
 					$ids[] = (int) $created['term_id'];
 				}
@@ -1235,6 +1301,11 @@ trait WPMCP_WooCommerce_Tools {
 	private function tool_delete_product( $args ) {
 		$product = $this->get_wc_product( (int) $args['id'], false );
 		$force   = WPMCP_Util::bool( $args['force'] ?? null );
+		WPMCP_Journal::note(
+			$force
+				? sprintf( 'Product %d was permanently deleted and is not restored by undo.', $product->get_id() )
+				: sprintf( 'Product %d was moved to the trash. Undo does not untrash it, so restore it from the trash instead.', $product->get_id() )
+		);
 		if ( $force && $product->is_type( 'variable' ) ) {
 			foreach ( $product->get_children() as $child_id ) {
 				$child = wc_get_product( $child_id );
@@ -1273,6 +1344,7 @@ trait WPMCP_WooCommerce_Tools {
 		if ( ! $copy ) {
 			WPMCP_Errors::fail( WPMCP_Errors::TOOL_FAILED, 'Duplication failed.' );
 		}
+		WPMCP_Journal::note( sprintf( 'Product %d created by duplicate_product is not deleted by undo. Use delete_product.', $copy->get_id() ) );
 		if ( ! empty( $args['name'] ) ) {
 			$copy->set_name( (string) $args['name'] );
 			$copy->save();
@@ -1460,7 +1532,7 @@ trait WPMCP_WooCommerce_Tools {
 			'matched' => count( $ids ),
 			'updated' => $updated,
 			'dry_run' => $dry,
-			'note'    => $dry ? 'Dry run — no products were written. Call again with dry_run=false to apply.' : 'Applied.',
+			'note'    => $dry ? 'Dry run: no products were written. Call again with dry_run=false to apply.' : 'Applied.',
 			'results' => $results,
 		];
 	}
@@ -1545,9 +1617,11 @@ trait WPMCP_WooCommerce_Tools {
 			if ( ! $variation || ! $variation->is_type( 'variation' ) ) {
 				WPMCP_Errors::fail( WPMCP_Errors::NOT_FOUND, sprintf( 'Variation %d was not found.', (int) $args['variation_id'] ) );
 			}
+			$this->journal_product_args( $variation->get_id(), $args );
 		} else {
 			$variation = new WC_Product_Variation();
 			$variation->set_parent_id( $parent->get_id() );
+			WPMCP_Journal::note( sprintf( 'The variation created on product %d by save_product_variation is not deleted by undo.', $parent->get_id() ) );
 		}
 
 		try {
@@ -1631,6 +1705,7 @@ trait WPMCP_WooCommerce_Tools {
 			WPMCP_Errors::fail( WPMCP_Errors::NOT_FOUND, sprintf( 'Variation %d was not found.', (int) $args['variation_id'] ) );
 		}
 		$parent_id = $variation->get_parent_id();
+		WPMCP_Journal::note( sprintf( 'Variation %d deleted by delete_product_variation is not restored by undo.', (int) $args['variation_id'] ) );
 		if ( ! $variation->delete( true ) ) {
 			WPMCP_Errors::fail( WPMCP_Errors::TOOL_FAILED, 'Variation could not be deleted.' );
 		}
@@ -1711,6 +1786,7 @@ trait WPMCP_WooCommerce_Tools {
 			if ( count( $created ) >= $max ) {
 				break;
 			}
+			WPMCP_Journal::note( sprintf( 'Variations created on product %d by generate_product_variations are not deleted by undo.', $parent->get_id() ) );
 			$variation = new WC_Product_Variation();
 			$variation->set_parent_id( $parent->get_id() );
 			$variation->set_attributes( $combo );
@@ -1830,6 +1906,7 @@ trait WPMCP_WooCommerce_Tools {
 			'has_archives' => WPMCP_Util::bool( $args['has_archives'] ?? null ),
 		];
 
+		WPMCP_Journal::note( 'Global attribute and term changes made by save_product_attribute are not restored by undo.' );
 		$result = $existing_id ? wc_update_attribute( $existing_id, $data ) : wc_create_attribute( $data );
 		if ( is_wp_error( $result ) ) {
 			WPMCP_Errors::from_wp_error( $result, WPMCP_Errors::TOOL_FAILED, 'Attribute names must be unique.' );
@@ -1847,7 +1924,7 @@ trait WPMCP_WooCommerce_Tools {
 		foreach ( WPMCP_Util::to_array( $args['terms'] ?? [] ) as $term_name ) {
 			$term = get_term_by( 'name', (string) $term_name, $taxonomy );
 			if ( ! $term ) {
-				$created = wp_insert_term( (string) $term_name, $taxonomy );
+				$created = wp_insert_term( wp_slash( (string) $term_name ), $taxonomy );
 				if ( is_wp_error( $created ) ) {
 					continue;
 				}
@@ -1928,7 +2005,9 @@ trait WPMCP_WooCommerce_Tools {
 				$fields['parent'] = (int) $args['parent'];
 			}
 			if ( $fields ) {
-				$result = wp_update_term( $term_id, 'product_cat', $fields );
+				WPMCP_Journal::note( sprintf( 'Name, slug, description and parent changes to category %d are not restored by undo.', $term_id ) );
+				// wp_update_term() unslashes the name and description.
+				$result = wp_update_term( $term_id, 'product_cat', wp_slash( $fields ) );
 				if ( is_wp_error( $result ) ) {
 					WPMCP_Errors::from_wp_error( $result );
 				}
@@ -1944,20 +2023,25 @@ trait WPMCP_WooCommerce_Tools {
 			if ( ! empty( $args['slug'] ) ) {
 				$create['slug'] = sanitize_title( $args['slug'] );
 			}
-			$result = wp_insert_term( (string) $args['name'], 'product_cat', $create );
+			// wp_insert_term() unslashes the name and description.
+			$result = wp_insert_term( wp_slash( (string) $args['name'] ), 'product_cat', wp_slash( $create ) );
 			if ( is_wp_error( $result ) ) {
 				WPMCP_Errors::from_wp_error( $result );
 			}
 			$term_id = (int) $result['term_id'];
+			WPMCP_Journal::note( sprintf( 'Category %d created by save_product_category is not deleted by undo.', $term_id ) );
 		}
 
 		if ( isset( $args['thumbnail_id'] ) ) {
+			WPMCP_Journal::term_meta( $term_id, 'thumbnail_id' );
 			update_term_meta( $term_id, 'thumbnail_id', (int) $args['thumbnail_id'] );
 		}
 		if ( ! empty( $args['display_type'] ) ) {
+			WPMCP_Journal::term_meta( $term_id, 'display_type' );
 			update_term_meta( $term_id, 'display_type', sanitize_key( $args['display_type'] ) );
 		}
 		if ( ! empty( $args['seo'] ) && is_array( $args['seo'] ) ) {
+			WPMCP_Journal::term_seo( $term_id, 'product_cat' );
 			WPMCP_SEO::set_term_seo( $term_id, 'product_cat', $args['seo'] );
 		}
 
@@ -1974,6 +2058,7 @@ trait WPMCP_WooCommerce_Tools {
 	 */
 	private function tool_delete_product_category( $args ) {
 		$this->require_woo();
+		WPMCP_Journal::note( sprintf( 'Category %d deleted by delete_product_category is not restored by undo.', (int) $args['term_id'] ) );
 		$result = wp_delete_term( (int) $args['term_id'], 'product_cat' );
 		if ( is_wp_error( $result ) ) {
 			WPMCP_Errors::from_wp_error( $result );
@@ -2081,6 +2166,7 @@ trait WPMCP_WooCommerce_Tools {
 				continue;
 			}
 
+			WPMCP_Journal::product( $variation->get_id(), [ 'image_id' ] );
 			$variation->set_image_id( $cache[ $slug ] );
 			$this->save_wc_object( $variation, 'variation' );
 			$applied++;
@@ -2097,6 +2183,7 @@ trait WPMCP_WooCommerce_Tools {
 
 		if ( ! $dry && $to_gallery ) {
 			$gallery = array_values( array_diff( array_unique( $gallery ), [ (int) $parent->get_image_id() ] ) );
+			WPMCP_Journal::product( $parent->get_id(), [ 'gallery_image_ids' ] );
 			$parent->set_gallery_image_ids( $gallery );
 			$this->save_wc_object( $parent, 'product' );
 		}
@@ -2113,8 +2200,8 @@ trait WPMCP_WooCommerce_Tools {
 			'unmatched_values' => $unmatched,
 			'errors'           => $errors,
 			'next_step'        => $dry
-				? 'Dry run — nothing was changed. Check each variation lines up with the right image, then call again with dry_run=false.'
-				: ( $unmatched ? 'Some image keys matched no variation — check they use the same attribute values as the product.' : 'Every matching variation now has its own image.' ),
+				? 'Dry run: nothing was changed. Check each variation lines up with the right image, then call again with dry_run=false.'
+				: ( $unmatched ? 'Some image keys matched no variation. Check they use the same attribute values as the product.' : 'Every matching variation now has its own image.' ),
 		];
 	}
 
@@ -2172,7 +2259,7 @@ trait WPMCP_WooCommerce_Tools {
 			WPMCP_Errors::fail(
 				WPMCP_Errors::INVALID_ARGUMENT,
 				sprintf( '"%s" is not a format this tool can write.', $convert ),
-				'Use webp, avif, jpg or png — or omit convert to keep each source format.',
+				'Use webp, avif, jpg or png, or omit convert to keep each source format.',
 				[ 'accepted' => [ 'webp', 'avif', 'jpg', 'png' ] ]
 			);
 		}
@@ -2296,13 +2383,16 @@ trait WPMCP_WooCommerce_Tools {
 		$alts = WPMCP_Util::to_array( $args['gallery_alts'] ?? [] );
 		foreach ( $gallery as $index => $gid ) {
 			if ( isset( $alts[ $index ] ) && '' !== $alts[ $index ] ) {
-				update_post_meta( $gid, '_wp_attachment_image_alt', sanitize_text_field( $alts[ $index ] ) );
+				WPMCP_Journal::post_meta( $gid, '_wp_attachment_image_alt' );
+				update_post_meta( $gid, '_wp_attachment_image_alt', wp_slash( sanitize_text_field( $alts[ $index ] ) ) );
 			} elseif ( '' !== $auto_alt && '' === (string) get_post_meta( $gid, '_wp_attachment_image_alt', true ) ) {
-				update_post_meta( $gid, '_wp_attachment_image_alt', sanitize_text_field( $auto_alt ) );
+				WPMCP_Journal::post_meta( $gid, '_wp_attachment_image_alt' );
+				update_post_meta( $gid, '_wp_attachment_image_alt', wp_slash( sanitize_text_field( $auto_alt ) ) );
 			}
 		}
 		if ( $main_id && '' !== $auto_alt && '' === (string) get_post_meta( $main_id, '_wp_attachment_image_alt', true ) ) {
-			update_post_meta( $main_id, '_wp_attachment_image_alt', sanitize_text_field( $auto_alt ) );
+			WPMCP_Journal::post_meta( $main_id, '_wp_attachment_image_alt' );
+			update_post_meta( $main_id, '_wp_attachment_image_alt', wp_slash( sanitize_text_field( $auto_alt ) ) );
 		}
 
 		WPMCP_Journal::product( $product->get_id(), [ 'image_id' ] );
@@ -2330,7 +2420,7 @@ trait WPMCP_WooCommerce_Tools {
 			'errors'       => $errors,
 			'missing_alt'  => $missing_alt,
 			'next_step'    => $errors
-				? 'Some sources failed — see errors. Everything else was saved; re-send just the failures.'
+				? 'Some sources failed; see errors. Everything else was saved; re-send just the failures.'
 				: ( $missing_alt ? 'Images without alt text are listed in missing_alt. Set them with set_image_alt or bulk_set_image_alt.' : 'Images saved. Run product_seo_audit to confirm nothing else is missing.' ),
 		];
 	}
@@ -2772,7 +2862,7 @@ trait WPMCP_WooCommerce_Tools {
 					)
 				),
 				'worst_offenders'        => $worst,
-				'next_step'              => 'product_seo_fix repairs missing titles, descriptions, alt text and schema in bulk — run it with dry_run=true first. generate_product_schema adds the brand, identifier and policy fields Merchant Center wants.',
+				'next_step'              => 'product_seo_fix repairs missing titles, descriptions, alt text and schema in bulk. Run it with dry_run=true first. generate_product_schema adds the brand, identifier and policy fields Merchant Center wants.',
 			]
 		);
 	}
@@ -2988,7 +3078,7 @@ trait WPMCP_WooCommerce_Tools {
 					$alts[ $aid ] = $product->get_name();
 					if ( ! $dry ) {
 						WPMCP_Journal::post_meta( $aid, '_wp_attachment_image_alt' );
-						update_post_meta( $aid, '_wp_attachment_image_alt', sanitize_text_field( $product->get_name() ) );
+						update_post_meta( $aid, '_wp_attachment_image_alt', wp_slash( sanitize_text_field( $product->get_name() ) ) );
 					}
 				}
 				if ( $alts ) {
@@ -3047,7 +3137,7 @@ trait WPMCP_WooCommerce_Tools {
 			'total'       => $total,
 			'next_offset' => $next < $total ? $next : null,
 			'next_step'   => $dry
-				? 'Dry run — nothing was written. The copy above is what will be saved; adjust the templates if it reads poorly, then call again with dry_run=false.'
+				? 'Dry run: nothing was written. The copy above is what will be saved; adjust the templates if it reads poorly, then call again with dry_run=false.'
 				: ( $next < $total ? sprintf( 'Call again with offset=%d for the next batch.', $next ) : 'Re-run product_seo_audit to confirm what is left.' ),
 		];
 	}
@@ -3192,6 +3282,11 @@ trait WPMCP_WooCommerce_Tools {
 		}
 
 		$saved_id = $this->save_wc_object( $coupon, 'coupon' );
+		WPMCP_Journal::note(
+			$id
+				? sprintf( 'Changes to coupon %d are not restored by undo.', $saved_id )
+				: sprintf( 'Coupon %d created by save_coupon is not deleted by undo. Use delete_coupon.', $saved_id )
+		);
 		return [
 			'success' => true,
 			'coupon'  => $this->coupon_payload( new WC_Coupon( $saved_id ) ),
@@ -3209,6 +3304,7 @@ trait WPMCP_WooCommerce_Tools {
 		if ( ! $p || 'shop_coupon' !== $p->post_type ) {
 			WPMCP_Errors::fail( WPMCP_Errors::NOT_FOUND, sprintf( 'Coupon %d was not found.', $id ) );
 		}
+		WPMCP_Journal::note( sprintf( 'Coupon %d deleted by delete_coupon is not restored by undo.', $id ) );
 		wp_delete_post( $id, true );
 		return [ 'success' => true, 'id' => $id ];
 	}
@@ -3286,7 +3382,7 @@ trait WPMCP_WooCommerce_Tools {
 			'top_sellers'   => array_slice( $sellers, 0, (int) ( $args['top_limit'] ?? 10 ) ?: 10 ),
 			'truncated'     => count( $orders ) >= $cap,
 			'note'          => count( $orders ) >= $cap
-				? sprintf( 'Counts the %d most recent orders in completed, processing and on-hold status — the period holds more. Narrow the period for exact totals. No customer data included.', $cap )
+				? sprintf( 'Counts the %d most recent orders in completed, processing and on-hold status; the period holds more. Narrow the period for exact totals. No customer data included.', $cap )
 				: 'Counts orders in completed, processing, and on-hold status. No customer data included.',
 		];
 	}
@@ -3435,6 +3531,7 @@ trait WPMCP_WooCommerce_Tools {
 				$rejected[] = $key;
 				continue;
 			}
+			WPMCP_Journal::option( $key );
 			update_option( $key, $value );
 			$written[ $key ] = $value;
 		}

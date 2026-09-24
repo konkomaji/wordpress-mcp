@@ -4,7 +4,7 @@
  * helpers the performance tools report from.
  *
  * Everything here is stored as a single option of boolean/scalar flags and
- * applied on the public side only. Nothing is enabled by default — a site only
+ * applied on the public side only. Nothing is enabled by default: a site only
  * changes behaviour once someone (or the agent, on request) turns a flag on.
  *
  * @package WordPressMCP
@@ -66,7 +66,7 @@ class WPMCP_Performance {
 			],
 			'disable_xmlrpc'          => [
 				'label' => 'Disable XML-RPC',
-				'desc'  => 'Turns off the legacy XML-RPC endpoint and its pingback methods — a common brute-force and DDoS surface.',
+				'desc'  => 'Turns off the legacy XML-RPC endpoint and its pingback methods, a common brute-force and DDoS surface.',
 				'risk'  => 'low',
 				'saves' => 'Attack surface, and pingback spam load',
 			],
@@ -468,7 +468,9 @@ class WPMCP_Performance {
 	 */
 	public static function measure_url( $url ) {
 		$start    = microtime( true );
-		$response = wp_remote_get(
+		// wp_safe_remote_get() refuses private and loopback targets, including
+		// ones reached through a redirect. The site's own host stays allowed.
+		$response = wp_safe_remote_get(
 			$url,
 			[
 				'timeout'     => 30,

@@ -91,7 +91,7 @@ class WPMCP_SiteKit {
 			}
 		}
 
-		// Nobody verified as connected — fall back to the best guess so the
+		// Nobody verified as connected, so fall back to the best guess so the
 		// caller can still report a meaningful "not connected" diagnostic.
 		self::$resolved_uid = $candidates ? $candidates[0] : 0;
 		return self::$resolved_uid;
@@ -119,7 +119,7 @@ class WPMCP_SiteKit {
 
 	/**
 	 * Low-level internal Site Kit GET dispatched as a given user. Returns the
-	 * decoded data, or a WP_Error — never throws — so callers can branch.
+	 * decoded data, or a WP_Error (it never throws), so callers can branch.
 	 *
 	 * @param int    $uid   User ID to run as.
 	 * @param string $route Full REST route.
@@ -186,7 +186,7 @@ class WPMCP_SiteKit {
 		if ( $connected ) {
 			$note = $modules
 				? 'Site Kit connected. Active modules: ' . implode( ', ', $modules ) . '.'
-				: 'Site Kit connected, but no data modules (Search Console / Analytics / PageSpeed) are set up yet — connect them in Site Kit.';
+				: 'Site Kit connected, but no data modules (Search Console / Analytics / PageSpeed) are set up yet. Connect them in Site Kit.';
 		} elseif ( ! $uid ) {
 			$note = 'No administrator found to run Site Kit requests as.';
 		} else {
@@ -215,11 +215,19 @@ class WPMCP_SiteKit {
 	 */
 	public static function request( $module, $datapoint, $params = [] ) {
 		if ( ! self::is_active() ) {
-			throw new Exception( 'Google Site Kit is not active on this site.' );
+			WPMCP_Errors::fail(
+				WPMCP_Errors::DEPENDENCY_MISSING,
+				'Google Site Kit is not active on this site.',
+				'Install and activate Site Kit by Google, connect it to Google as an administrator, then call sitekit_status.'
+			);
 		}
 		$uid = self::admin_user_id();
 		if ( ! $uid ) {
-			throw new Exception( 'No administrator available to authenticate the Site Kit request. Connect Google Site Kit as an administrator first.' );
+			WPMCP_Errors::fail(
+				WPMCP_Errors::DEPENDENCY_MISSING,
+				'No administrator is available to authenticate the Site Kit request.',
+				'Connect Google Site Kit as an administrator first, then call sitekit_status.'
+			);
 		}
 
 		$route  = sprintf( '/google-site-kit/v1/modules/%s/data/%s', $module, $datapoint );
@@ -231,9 +239,19 @@ class WPMCP_SiteKit {
 			$message = $result->get_error_message();
 			// Make the most common cause actionable rather than cryptic.
 			if ( false !== stripos( $message, 'authenticate' ) || false !== stripos( $message, 'permission' ) || 401 === $status || 403 === $status ) {
-				$message .= ' — Site Kit reports the run-as admin (user ' . $uid . ') is not connected to Google or lacks access to this module. Check Integration status in WordPress MCP and reconnect Site Kit.';
+				WPMCP_Errors::fail(
+					WPMCP_Errors::PERMISSION_DENIED,
+					sprintf( 'Site Kit error [%s] on %s/%s: %s', $status, $module, $datapoint, $message ),
+					sprintf( 'Site Kit reports that the run-as admin (user %d) is not connected to Google or lacks access to this module. Check Integration status in WordPress MCP and reconnect Site Kit.', $uid ),
+					[ 'status' => $status, 'module' => $module, 'datapoint' => $datapoint ]
+				);
 			}
-			throw new Exception( sprintf( 'Site Kit error [%s] on %s/%s: %s', $status, $module, $datapoint, $message ) );
+			WPMCP_Errors::fail(
+				WPMCP_Errors::UPSTREAM_FAILED,
+				sprintf( 'Site Kit error [%s] on %s/%s: %s', $status, $module, $datapoint, $message ),
+				'Check the module is connected in Site Kit and the parameters (dates, metrics, dimensions) are valid for it.',
+				[ 'status' => $status, 'module' => $module, 'datapoint' => $datapoint ]
+			);
 		}
 		return $result;
 	}

@@ -18,6 +18,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 require_once WPMCP_DIR . 'includes/tools/trait-wpmcp-content.php';
+require_once WPMCP_DIR . 'includes/tools/trait-wpmcp-search.php';
 require_once WPMCP_DIR . 'includes/tools/trait-wpmcp-ops.php';
 require_once WPMCP_DIR . 'includes/tools/trait-wpmcp-seotech.php';
 require_once WPMCP_DIR . 'includes/tools/trait-wpmcp-media.php';
@@ -37,6 +38,7 @@ require_once WPMCP_DIR . 'includes/tools/trait-wpmcp-database.php';
 class WPMCP_Tools {
 
 	use WPMCP_Content_Tools;
+	use WPMCP_Search_Tools;
 	use WPMCP_Ops_Tools;
 	use WPMCP_SEOTech_Tools;
 	use WPMCP_Media_Tools;
@@ -75,6 +77,7 @@ class WPMCP_Tools {
 		if ( null === $this->catalogue ) {
 			$this->catalogue = array_merge(
 				$this->defs_content(),
+				$this->defs_search(),
 				$this->defs_ops(),
 				$this->defs_seotech(),
 				$this->defs_media(),
@@ -103,13 +106,306 @@ class WPMCP_Tools {
 	public function exposed_definitions() {
 		$out = [];
 		foreach ( $this->definitions() as $tool ) {
-			if ( ! $this->is_available( $tool['group'] ) ) {
+			if ( ! $this->is_available( $tool['group'] ) || ! $this->in_scope( $tool['name'], $tool['group'] ) ) {
 				continue;
 			}
-			unset( $tool['group'] );
-			$out[] = $tool;
+			$out[] = $this->wire_definition( $tool );
 		}
 		return $out;
+	}
+
+	/**
+	 * Groups the current connection may use, or null for all of them.
+	 *
+	 * Set from the connection key's preset, a ?preset= or ?groups= on the
+	 * URL, or the matching headers. It only ever narrows: a group switched
+	 * off in settings stays off. With a limited key this is a security
+	 * boundary, so it is enforced in preflight() for every call, including
+	 * the steps inside a batch, not just hidden from tools/list.
+	 *
+	 * @var array<int,string>|null
+	 */
+	private $scope = null;
+
+	/**
+	 * Whether the connection may only use tools that read.
+	 *
+	 * @var bool
+	 */
+	private $read_only = false;
+
+	/**
+	 * Restrict this request to a set of capability groups.
+	 *
+	 * @param array<int,string>|null $groups    Group keys, or null for no restriction.
+	 * @param bool                   $read_only Allow only read-only tools.
+	 */
+	public function set_scope( $groups, $read_only = false ) {
+		$this->scope     = null === $groups ? null : array_values( array_intersect( array_keys( WPMCP_Settings::groups() ), $groups ) );
+		$this->read_only = (bool) $read_only;
+	}
+
+	/**
+	 * Whether this connection may use a capability group: enabled on the
+	 * site, inside the key's scope, and (for writes) not read-only. Tools use
+	 * it for data that crosses into another group's territory, such as user
+	 * meta (Site Management) or reading a server path (Filesystem).
+	 *
+	 * @param string $group Group key.
+	 * @param bool   $write Whether the use writes.
+	 * @return bool
+	 */
+	public function connection_allows( $group, $write = false ) {
+		if ( ! WPMCP_Settings::can( $group ) ) {
+			return false;
+		}
+		if ( $write && $this->read_only ) {
+			return false;
+		}
+		return null === $this->scope || in_array( $group, $this->scope, true );
+	}
+
+	/**
+	 * Whether the connection is read-only.
+	 *
+	 * @return bool
+	 */
+	public function connection_is_read_only() {
+		return $this->read_only;
+	}
+
+	/**
+	 * Whether a tool is inside the connection's scope.
+	 *
+	 * @param string $name  Tool name.
+	 * @param string $group Group key.
+	 * @return bool
+	 */
+	private function in_scope( $name, $group, $args = null ) {
+		if ( $this->read_only ) {
+			// Listing (no arguments): show tools that can be called to read.
+			// Calling: this particular call must only read.
+			$reads = null === $args ? WPMCP_Audit::has_read_mode( $name ) : WPMCP_Audit::is_read_only_call( $name, $args );
+			if ( ! $reads ) {
+				return false;
+			}
+		}
+		if ( null === $this->scope ) {
+			return true;
+		}
+		// The diagnostics group carries mcp_status and site_info, which every
+		// agent needs to orient itself, so a scoped connection keeps it. A
+		// connection can always check on its own change requests, and batch
+		// is only a container: every step is checked on its own.
+		if ( 'diagnostics' === $group || in_array( $name, [ 'list_change_requests', 'batch' ], true ) ) {
+			return true;
+		}
+		return in_array( $group, $this->scope, true );
+	}
+	/**
+	 * Shape a definition for the wire.
+	 *
+	 * The catalogue is written for people; this makes it safe for every MCP
+	 * client and model provider at once. It drops internal keys, makes sure
+	 * empty maps encode as {} rather than [] (an empty PHP array becomes a
+	 * JSON list, which strict schema validators reject), and adds a display
+	 * title and behaviour annotations. Clients use the annotations to decide
+	 * which calls need the user's confirmation.
+	 *
+	 * @param array $tool Catalogue entry.
+	 * @return array
+	 */
+	private function wire_definition( $tool ) {
+		$name  = $tool['name'];
+		$read  = WPMCP_Audit::is_read_only( $name );
+		$title = $tool['title'] ?? self::title_for( $name );
+		$input = self::wire_schema( $tool['inputSchema'] ?? [ 'type' => 'object' ] );
+		// Several clients read inputSchema.properties without checking for it,
+		// so a tool with no arguments still sends an empty map.
+		if ( ! isset( $input['properties'] ) ) {
+			$input['properties'] = new stdClass();
+		}
+		$out = [
+			'name'        => $name,
+			'title'       => $title,
+			'description' => $tool['description'],
+			'inputSchema' => $input,
+			'annotations' => [
+				'title'           => $title,
+				'readOnlyHint'    => $read,
+				'destructiveHint' => ! $read && self::is_destructive( $name ),
+				'idempotentHint'  => $read,
+				'openWorldHint'   => self::is_open_world( $name ),
+			],
+		];
+		$output = $this->output_schema( $name );
+		if ( $output ) {
+			$out['outputSchema'] = self::wire_schema( $output );
+		}
+		return $out;
+	}
+
+	/**
+	 * Output schema for a tool whose result has a stable shape, or null.
+	 *
+	 * Clients that understand structured output (MCP 2025-06-18 and later)
+	 * get the result as structuredContent too, validated against this, so
+	 * they can render tables and hand typed data to code instead of parsing
+	 * JSON out of text. Only keys that are always present with a fixed type
+	 * are declared; everything else stays open (additional properties are
+	 * allowed), so a new field never breaks a client.
+	 *
+	 * @param string $name Tool name.
+	 * @return array|null
+	 */
+	public function output_schema( $name ) {
+		$str  = [ 'type' => 'string' ];
+		$int  = [ 'type' => 'integer' ];
+		$bool = [ 'type' => 'boolean' ];
+		$obj  = [ 'type' => 'object' ];
+		$list = function ( $items ) {
+			return [
+				'type'  => 'array',
+				'items' => $items,
+			];
+		};
+		$shape = function ( $props, $required = [] ) {
+			$schema = [
+				'type'       => 'object',
+				'properties' => $props,
+			];
+			if ( $required ) {
+				$schema['required'] = $required;
+			}
+			return $schema;
+		};
+
+		switch ( $name ) {
+			case 'search':
+				return $shape(
+					[
+						'results' => $list( $shape( [ 'id' => $str, 'title' => $str, 'url' => $str, 'text' => $str, 'type' => $str ], [ 'id', 'title', 'url' ] ) ),
+						'total'   => $int,
+					],
+					[ 'results' ]
+				);
+			case 'fetch':
+				return $shape( [ 'id' => $str, 'title' => $str, 'text' => $str, 'url' => $str, 'metadata' => $obj ], [ 'id', 'title', 'text', 'url' ] );
+			case 'site_info':
+				return $shape( [ 'wp_version' => $str, 'php_version' => $str, 'site_url' => $str, 'home_url' => $str, 'active_theme' => $str, 'multisite' => $bool, 'seo_engine' => $str, 'woocommerce_active' => $bool ], [ 'wp_version', 'site_url' ] );
+			case 'seo_status':
+				return $shape( [ 'seo' => $obj, 'sitekit' => $obj ], [ 'seo' ] );
+			case 'get_seo':
+				return $shape( [ 'provider' => $str, 'title' => $str, 'description' => $str, 'focus_keyword' => $str, 'canonical' => $str, 'noindex' => $bool, 'nofollow' => $bool ] );
+			case 'list_content':
+				return $shape( [ 'total' => $int, 'pages' => $int, 'items' => $list( $obj ) ], [ 'items' ] );
+			case 'list_operations':
+				return $shape( [ 'operations' => $list( $obj ), 'kept' => $int ], [ 'operations' ] );
+			case 'list_change_requests':
+				return $shape( [ 'count' => $int, 'requests' => $list( $obj ), 'id' => $str, 'status' => $str ] );
+			case 'mcp_status':
+				return $shape( [ 'plugin_version' => $str, 'endpoint' => $str, 'https' => $bool, 'tools_defined' => $int, 'tools_exposed' => $int, 'groups' => $list( $obj ) ], [ 'plugin_version', 'endpoint' ] );
+		}
+		return null;
+	}
+
+	/**
+	 * Clean one JSON Schema node for the wire.
+	 *
+	 * @param mixed $schema Schema node.
+	 * @return mixed
+	 */
+	private static function wire_schema( $schema ) {
+		if ( ! is_array( $schema ) ) {
+			return $schema;
+		}
+		$out = [];
+		foreach ( $schema as $key => $value ) {
+			if ( is_string( $key ) && '_' === $key[0] ) {
+				continue; // Internal hint for the validator, not part of the schema.
+			}
+			if ( 'properties' === $key ) {
+				$props = [];
+				foreach ( (array) $value as $prop => $sub ) {
+					$props[ $prop ] = self::wire_schema( $sub );
+				}
+				$out['properties'] = $props ? $props : new stdClass();
+				continue;
+			}
+			if ( 'items' === $key ) {
+				$out['items'] = self::wire_schema( $value );
+				continue;
+			}
+			if ( 'required' === $key && ! $value ) {
+				continue; // An empty list is noise, and some validators reject it.
+			}
+			$out[ $key ] = $value;
+		}
+		return $out;
+	}
+
+	/**
+	 * Display title from a tool name: "bulk_set_seo" -> "Bulk set SEO".
+	 *
+	 * @param string $name Tool name.
+	 * @return string
+	 */
+	private static function title_for( $name ) {
+		$map   = [
+			'seo'      => 'SEO',
+			'sql'      => 'SQL',
+			'mcp'      => 'MCP',
+			'url'      => 'URL',
+			'urls'     => 'URLs',
+			'id'       => 'ID',
+			'ids'      => 'IDs',
+			'serp'     => 'SERP',
+			'sitekit'  => 'Site Kit',
+			'indexnow' => 'IndexNow',
+			'llms'     => 'llms.txt',
+			'robots'   => 'robots.txt',
+			'txt'      => '',
+		];
+		$words = [];
+		foreach ( explode( '_', $name ) as $word ) {
+			$words[] = $map[ $word ] ?? $word;
+		}
+		return ucfirst( trim( implode( ' ', $words ) ) );
+	}
+
+	/**
+	 * Whether a write can remove or overwrite data in a way that is hard to
+	 * see coming. Undo still applies to most of these; the hint is for the
+	 * client's confirmation prompt.
+	 *
+	 * @param string $name Tool name.
+	 * @return bool
+	 */
+	private static function is_destructive( $name ) {
+		foreach ( [ 'delete_', 'bulk_', 'restore_', 'refund_' ] as $prefix ) {
+			if ( 0 === strpos( $name, $prefix ) ) {
+				return true;
+			}
+		}
+		return in_array(
+			$name,
+			[ 'search_replace_content', 'database_cleanup', 'optimize_site', 'sql_execute', 'switch_theme', 'deactivate_plugin', 'update_plugin', 'write_file', 'edit_file', 'move_file', 'clear_cache', 'update_option', 'moderate_comment', 'undo_operation', 'regenerate_thumbnails', 'optimize_image', 'manage_permalinks', 'batch', 'save_user', 'update_store_settings' ],
+			true
+		);
+	}
+
+	/**
+	 * Whether a tool reaches outside this WordPress install.
+	 *
+	 * @param string $name Tool name.
+	 * @return bool
+	 */
+	private static function is_open_world( $name ) {
+		return 0 === strpos( $name, 'sitekit_' ) || in_array(
+			$name,
+			[ 'find_broken_links', 'analyze_page_speed', 'indexnow_submit', 'install_plugin', 'install_theme', 'update_plugin', 'upload_media', 'manage_product_images', 'create_product', 'update_product', 'batch' ],
+			true
+		);
 	}
 
 	/**
@@ -172,7 +468,7 @@ class WPMCP_Tools {
 		}
 
 		// Pre-flight rejections (unknown tool, disabled group, bad arguments)
-		// are logged too — they are the failures someone is most likely to be
+		// are logged too: they are the failures someone is most likely to be
 		// asking "why did that call not work?" about afterwards.
 		try {
 			$args = $this->preflight( $name, $args );
@@ -188,6 +484,26 @@ class WPMCP_Tools {
 			);
 			WPMCP_Audit::record( $name, $args, 'rejected', microtime( true ) - $started, [ 'code' => $e->get_error_code() ] );
 			throw $e;
+		}
+
+		// A connection that needs approval queues its writes instead of
+		// running them. Only the outer call is checked: a batch is one request.
+		if ( $outermost && WPMCP_Approvals::must_queue( $name, $args ) ) {
+			// A queued batch must not smuggle in steps this connection could
+			// not run itself: check every step now, while the key's scope is
+			// in force, rather than at approval time.
+			if ( 'batch' === $name ) {
+				foreach ( (array) ( $args['operations'] ?? [] ) as $step ) {
+					if ( ! is_array( $step ) || empty( $step['tool'] ) || 'batch' === $step['tool'] ) {
+						WPMCP_Errors::fail( WPMCP_Errors::INVALID_ARGUMENT, 'Every batch step needs a tool, and a batch cannot contain a batch.' );
+					}
+					$this->preflight( (string) $step['tool'], isset( $step['args'] ) && is_array( $step['args'] ) ? $step['args'] : [] );
+				}
+			}
+			$queued = WPMCP_Approvals::queue( $name, $args );
+			WPMCP_Progress::finish();
+			WPMCP_Audit::record( $name, $args, 'queued', microtime( true ) - $started, [ 'request_id' => $queued['request_id'] ] );
+			return $queued;
 		}
 
 		/**
@@ -250,8 +566,8 @@ class WPMCP_Tools {
 			);
 			throw $e;
 		} catch ( Throwable $e ) {
-			// Anything a handler did not anticipate — a TypeError inside a
-			// third-party hook, a division by zero — becomes a typed error
+			// Anything a handler did not anticipate (a TypeError inside a
+			// third-party hook, a division by zero) becomes a typed error
 			// instead of a 500 the client cannot interpret.
 			$this->depth--;
 			$warnings = WPMCP_Errors::end();
@@ -347,6 +663,16 @@ class WPMCP_Tools {
 				[ 'group' => $group ]
 			);
 		}
+		if ( ! $this->in_scope( $name, $group, is_array( $args ) ? $args : [] ) ) {
+			WPMCP_Errors::fail(
+				WPMCP_Errors::CAPABILITY_DISABLED,
+				sprintf( 'Tool "%s" is not available on this connection.', $name ),
+				$this->read_only && ! WPMCP_Audit::is_read_only_call( $name, is_array( $args ) ? $args : [] )
+					? 'This connection is read-only. Ask the site owner for a key that allows changes.'
+					: 'This connection is limited to certain capability groups by its key, preset or ?groups= setting. Ask the site owner for a key that includes this group.',
+				[ 'group' => $group ]
+			);
+		}
 		if ( ! $this->is_available( $group ) ) {
 			WPMCP_Errors::fail(
 				WPMCP_Errors::DEPENDENCY_MISSING,
@@ -362,7 +688,7 @@ class WPMCP_Tools {
 			WPMCP_Errors::fail(
 				WPMCP_Errors::TOOL_FAILED,
 				sprintf( 'Tool "%s" is declared but has no handler.', $name ),
-				'This is a bug in the plugin — please report it.'
+				'This is a bug in the plugin. Please report it.'
 			);
 		}
 

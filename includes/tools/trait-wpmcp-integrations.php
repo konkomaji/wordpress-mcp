@@ -50,8 +50,8 @@ trait WPMCP_Integrations_Tools {
 				'inputSchema' => [
 					'type'       => 'object',
 					'properties' => [
-						'metrics'    => [ 'type' => 'array', 'description' => 'Array of {name: "sessions"} style GA4 metrics.' ],
-						'dimensions' => [ 'type' => 'array', 'description' => 'Array of {name: "pagePath"} style GA4 dimensions.' ],
+						'metrics'    => [ 'type' => 'array', 'items' => [ 'type' => 'object', 'properties' => [ 'name' => [ 'type' => 'string' ] ] ], 'description' => 'Array of {name: "sessions"} style GA4 metrics.' ],
+						'dimensions' => [ 'type' => 'array', 'items' => [ 'type' => 'object', 'properties' => [ 'name' => [ 'type' => 'string' ] ] ], 'description' => 'Array of {name: "pagePath"} style GA4 dimensions.' ],
 						'start_date' => [ 'type' => 'string' ],
 						'end_date'   => [ 'type' => 'string' ],
 						'limit'      => [ 'type' => 'integer' ],
@@ -74,7 +74,7 @@ trait WPMCP_Integrations_Tools {
 			[
 				'group'       => 'sitekit',
 				'name'        => 'sitekit_keyword_opportunities',
-				'description' => 'Mine Search Console for quick-win SEO keywords: queries ranking on positions 5-20 (page 1-2 striking distance) with meaningful impressions but low CTR — the highest-ROI optimisation targets. Returns query, clicks, impressions, CTR, position, sorted by opportunity.',
+				'description' => 'Mine Search Console for quick-win SEO keywords: queries ranking on positions 5-20 (page 1-2 striking distance) with meaningful impressions but low CTR: the highest-ROI optimisation targets. Returns query, clicks, impressions, CTR, position, sorted by opportunity.',
 				'inputSchema' => [
 					'type'       => 'object',
 					'properties' => [
@@ -150,7 +150,7 @@ trait WPMCP_Integrations_Tools {
 			[
 				'group'       => 'diagnostics',
 				'name'        => 'get_error_log',
-				'description' => 'Read the rolling log of recent MCP tool failures — tool name, error code, message, and any PHP warnings captured during the call. action=clear empties it.',
+				'description' => 'Read the rolling log of recent MCP tool failures: tool name, error code, message, and any PHP warnings captured during the call. action=clear empties it.',
 				'inputSchema' => [
 					'type'       => 'object',
 					'properties' => [
@@ -387,8 +387,10 @@ trait WPMCP_Integrations_Tools {
 			];
 		}
 
+		$key = WPMCP_Keys::current();
 		return [
 			'plugin_version'  => WPMCP_VERSION,
+			'connection'      => $key ? WPMCP_Keys::describe( $key ) : null,
 			'endpoint'        => rest_url( WPMCP_NAMESPACE . '/mcp' ),
 			'https'           => 0 === strpos( strtolower( rest_url( WPMCP_NAMESPACE . '/mcp' ) ), 'https://' ),
 			'tools_defined'   => count( $defined ),
@@ -417,6 +419,15 @@ trait WPMCP_Integrations_Tools {
 	 */
 	private function tool_get_error_log( $args ) {
 		if ( 'clear' === ( $args['action'] ?? 'get' ) ) {
+			// Clearing destroys the record of what went wrong, which is a write
+			// a read-only connection must not be able to make.
+			if ( $this->connection_is_read_only() ) {
+				WPMCP_Errors::fail(
+					WPMCP_Errors::PERMISSION_DENIED,
+					'This connection is read-only, so it cannot clear the error log.',
+					'Call get_error_log without action to read the log, or clear it from a connection that can write.'
+				);
+			}
 			WPMCP_Errors::clear_log();
 			return [ 'success' => true, 'cleared' => true ];
 		}

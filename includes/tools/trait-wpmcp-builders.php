@@ -33,7 +33,7 @@ trait WPMCP_Builders_Tools {
 			[
 				'group'       => 'builders',
 				'name'        => 'detect_page_builder',
-				'description' => 'Report which page builders are installed on this site (Elementor, Gutenberg blocks, Divi, WPBakery, Beaver Builder, Oxygen, Bricks, Breakdance, SiteOrigin, Thrive) and — for a given page — which one actually renders it, plus what this plugin can read and write for that builder. ALWAYS call this before editing an unfamiliar page: overwriting post_content on a builder page destroys the layout.',
+				'description' => 'Report which page builders are installed on this site (Elementor, Gutenberg blocks, Divi, WPBakery, Beaver Builder, Oxygen, Bricks, Breakdance, SiteOrigin, Thrive) and, for a given page, which one actually renders it, plus what this plugin can read and write for that builder. ALWAYS call this before editing an unfamiliar page: overwriting post_content on a builder page destroys the layout.',
 				'inputSchema' => [
 					'type'       => 'object',
 					'properties' => [
@@ -44,14 +44,14 @@ trait WPMCP_Builders_Tools {
 			[
 				'group'       => 'builders',
 				'name'        => 'get_page_structure',
-				'description' => 'Read a page as an editable tree, whatever built it. Returns every section, column, widget or block with a stable element_id/path, its type, and its editable text and media — so you can see the layout and target one piece of it. Works for Elementor, Gutenberg blocks, Divi, WPBakery, Beaver Builder, and plain HTML.',
+				'description' => 'Read a page as an editable tree, whatever built it. Returns every section, column, widget or block with a stable element_id/path, its type, and its editable text and media, so you can see the layout and target one piece of it. Works for Elementor, Gutenberg blocks, Divi, WPBakery, Beaver Builder, and plain HTML.',
 				'inputSchema' => [
 					'type'       => 'object',
 					'properties' => [
 						'id'        => [ 'type' => 'integer' ],
 						'depth'     => [ 'type' => 'integer', 'description' => 'How deep to walk the tree. Default 6.' ],
 						'text_only' => [ 'type' => 'boolean', 'description' => 'Return only elements that carry editable text. Default false.' ],
-						'raw'       => [ 'type' => 'boolean', 'description' => 'Also return the builder\'s raw data for the page. Large — off by default.' ],
+						'raw'       => [ 'type' => 'boolean', 'description' => 'Also return the builder\'s raw data for the page. Large, so off by default.' ],
 					],
 					'required'   => [ 'id' ],
 				],
@@ -65,7 +65,7 @@ trait WPMCP_Builders_Tools {
 					'properties' => [
 						'id'         => [ 'type' => 'integer', 'description' => 'Page ID.' ],
 						'element_id' => [ 'type' => 'string', 'description' => 'Element id (Elementor/Beaver) or path (Gutenberg "0.2", Divi/WPBakery index) from get_page_structure.' ],
-						'text'       => [ 'type' => 'string', 'description' => 'New text/content for the element — mapped to the right field for its type.' ],
+						'text'       => [ 'type' => 'string', 'description' => 'New text/content for the element, mapped to the right field for its type.' ],
 						'link'       => [ 'type' => 'string', 'description' => 'New URL for a button or link element.' ],
 						'image_id'   => [ 'type' => 'integer', 'description' => 'Attachment ID to use as the element image.' ],
 						'image_url'  => [ 'type' => 'string', 'description' => 'Image URL to use directly.' ],
@@ -78,7 +78,7 @@ trait WPMCP_Builders_Tools {
 			[
 				'group'       => 'builders',
 				'name'        => 'insert_page_section',
-				'description' => 'Add new content to a builder page — a Gutenberg block, an Elementor widget or section, or a shortcode block for Divi/WPBakery — at the top, the bottom, or next to an existing element. Pass ready-made builder data, or a simple type + text and the right structure is generated for the page\'s builder.',
+				'description' => 'Add new content to a builder page (a Gutenberg block, an Elementor widget or section, or a shortcode block for Divi/WPBakery) at the top, the bottom, or next to an existing element. Pass ready-made builder data, or a simple type + text and the right structure is generated for the page\'s builder.',
 				'inputSchema' => [
 					'type'       => 'object',
 					'properties' => [
@@ -127,9 +127,9 @@ trait WPMCP_Builders_Tools {
 				'inputSchema' => [
 					'type'       => 'object',
 					'properties' => [
-						'action'   => [ 'type' => 'string', 'description' => 'get|set. Default get.' ],
+						'action'   => [ 'type' => 'string', 'enum' => [ 'get', 'set' ], 'description' => 'get|set. Default get.' ],
 						'builder'  => [ 'type' => 'string', 'description' => 'elementor|gutenberg. Defaults to whichever is active.' ],
-						'colors'   => [ 'type' => 'array', 'description' => 'For action=set: [{name/slug, color}].' ],
+						'colors'   => [ 'type' => 'array', 'items' => [ 'type' => 'object', 'properties' => [ 'name' => [ 'type' => 'string' ], 'slug' => [ 'type' => 'string' ], 'color' => [ 'type' => 'string' ] ] ], 'description' => 'For action=set: [{name/slug, color}].' ],
 						'settings' => [ 'type' => 'object', 'description' => 'For action=set: raw settings to merge (Elementor kit settings, or theme.json settings).' ],
 					],
 				],
@@ -137,7 +137,7 @@ trait WPMCP_Builders_Tools {
 			[
 				'group'       => 'builders',
 				'name'        => 'render_page_preview',
-				'description' => 'Fetch a page as a visitor sees it and return the rendered output — the text, headings, images, links and inline styles the browser receives. The way to check what an edit actually produced, since builder data alone does not show the final result.',
+				'description' => 'Fetch a page as a visitor sees it and return the rendered output: the text, headings, images, links and inline styles the browser receives. The way to check what an edit actually produced, since builder data alone does not show the final result.',
 				'inputSchema' => [
 					'type'       => 'object',
 					'properties' => [
@@ -202,7 +202,7 @@ trait WPMCP_Builders_Tools {
 				'constant'  => 'CT_VERSION',
 				'meta'      => 'ct_builder_shortcodes',
 				'support'   => 'read',
-				'note'      => 'Readable only — Oxygen stores its own shortcode tree and regenerates CSS on save.',
+				'note'      => 'Readable only. Oxygen stores its own shortcode tree and regenerates CSS on save.',
 			],
 			'bricks'     => [
 				'name'      => 'Bricks',
@@ -349,7 +349,7 @@ trait WPMCP_Builders_Tools {
 				'safe_to_overwrite_post_content' => in_array( $builder['key'], [ 'classic', 'gutenberg' ], true ),
 			];
 			if ( ! $result['page']['safe_to_overwrite_post_content'] ) {
-				$result['page']['warning'] = 'Do NOT use update_content to replace this page body — the builder renders from its own data and the change would either be ignored or wreck the layout. Use get_page_structure then edit_page_element.';
+				$result['page']['warning'] = 'Do NOT use update_content to replace this page body. The builder renders from its own data and the change would either be ignored or wreck the layout. Use get_page_structure then edit_page_element.';
 			}
 		} else {
 			$result['note'] = 'Pass a page id to see which builder actually renders that page.';
@@ -411,7 +411,7 @@ trait WPMCP_Builders_Tools {
 			'element_count' => count( $elements ),
 			'elements'      => $elements,
 			'how_to_edit'   => 'classic' === $builder['key']
-				? 'This is plain HTML — edit_page_element works on the numbered blocks above, or replace the whole body with update_content.'
+				? 'This is plain HTML: edit_page_element works on the numbered blocks above, or replace the whole body with update_content.'
 				: sprintf( 'Pass an element_id from this list to edit_page_element. %s', $builder['note'] ),
 		];
 
@@ -717,7 +717,7 @@ trait WPMCP_Builders_Tools {
 				'permalink' => get_permalink( $post->ID ),
 			],
 			$result,
-			$dry ? [ 'note' => 'Dry run — nothing was written.' ] : [ 'note' => 'Saved. Use render_page_preview to confirm the rendered output.' ]
+			$dry ? [ 'note' => 'Dry run: nothing was written.' ] : [ 'note' => 'Saved. Use render_page_preview to confirm the rendered output.' ]
 		);
 	}
 
@@ -800,6 +800,7 @@ trait WPMCP_Builders_Tools {
 			if ( false === $json ) {
 				WPMCP_Errors::fail( WPMCP_Errors::TOOL_FAILED, 'The updated layout could not be encoded.' );
 			}
+			WPMCP_Journal::post_meta( $post_id, '_elementor_data' );
 			update_post_meta( $post_id, '_elementor_data', wp_slash( $json ) );
 		}
 
@@ -956,7 +957,7 @@ trait WPMCP_Builders_Tools {
 			WPMCP_Errors::fail(
 				WPMCP_Errors::NOT_FOUND,
 				sprintf( 'No shortcode element at index %d.', $index ),
-				sprintf( 'This page has %d shortcode elements — call get_page_structure to list them.', count( $m ) )
+				sprintf( 'This page has %d shortcode elements. Call get_page_structure to list them.', count( $m ) )
 			);
 		}
 
@@ -972,14 +973,14 @@ trait WPMCP_Builders_Tools {
 
 		if ( isset( $args['text'] ) ) {
 			// Only replace the body when it holds text rather than nested
-			// shortcodes — rewriting a container would delete its children.
+			// shortcodes, because rewriting a container would delete its children.
 			if ( '' !== $body && ! preg_match( '/\[[a-z0-9_]+/i', $body ) ) {
 				$new_body = (string) $args['text'];
 			} else {
 				WPMCP_Errors::fail(
 					WPMCP_Errors::CONFLICT,
 					sprintf( 'Element %d ([%s]) is a container holding other elements, not a text element.', $index, $tag ),
-					'Target the inner text element instead — get_page_structure lists them with their own indexes.'
+					'Target the inner text element instead; get_page_structure lists them with their own indexes.'
 				);
 			}
 		}
@@ -1041,7 +1042,7 @@ trait WPMCP_Builders_Tools {
 			WPMCP_Errors::fail(
 				WPMCP_Errors::NOT_FOUND,
 				sprintf( 'No content block at index %d.', $index ),
-				sprintf( 'This page has %d blocks — call get_page_structure to list them.', count( $chunks ) )
+				sprintf( 'This page has %d blocks. Call get_page_structure to list them.', count( $chunks ) )
 			);
 		}
 
@@ -1089,6 +1090,9 @@ trait WPMCP_Builders_Tools {
 	 * @throws WPMCP_Tool_Exception On failure.
 	 */
 	private function save_post_content( $post_id, $content ) {
+		// Every builder write that goes through post_content lands here, so one
+		// snapshot makes edit, insert and delete on those pages undoable.
+		WPMCP_Journal::post_fields( (int) $post_id, [ 'post_content' ] );
 		$result = wp_update_post(
 			[
 				'ID'           => (int) $post_id,
@@ -1312,9 +1316,11 @@ trait WPMCP_Builders_Tools {
 		if ( false === $json ) {
 			WPMCP_Errors::fail( WPMCP_Errors::TOOL_FAILED, 'The updated layout could not be encoded.' );
 		}
+		WPMCP_Journal::post_meta( $post_id, '_elementor_data' );
 		update_post_meta( $post_id, '_elementor_data', wp_slash( $json ) );
 		// A page edited only through MCP still has to be flagged as Elementor.
 		if ( 'builder' !== get_post_meta( $post_id, '_elementor_edit_mode', true ) ) {
+			WPMCP_Journal::post_meta( $post_id, '_elementor_edit_mode' );
 			update_post_meta( $post_id, '_elementor_edit_mode', 'builder' );
 		}
 
@@ -1477,7 +1483,7 @@ trait WPMCP_Builders_Tools {
 		}
 
 		if ( 'divi' === $builder ) {
-			// Bare HTML inside a Divi layout will not render — wrap it in a
+			// Bare HTML inside a Divi layout will not render, so wrap it in a
 			// text module so the builder keeps ownership of the markup.
 			$html = '[et_pb_section][et_pb_row][et_pb_column type="4_4"][et_pb_text]' . $html . '[/et_pb_text][/et_pb_column][/et_pb_row][/et_pb_section]';
 		} elseif ( 'wpbakery' === $builder ) {
@@ -1549,6 +1555,7 @@ trait WPMCP_Builders_Tools {
 					WPMCP_Errors::fail( WPMCP_Errors::NOT_FOUND, sprintf( 'No Elementor element with id "%s".', $target ) );
 				}
 				if ( ! $dry ) {
+					WPMCP_Journal::post_meta( $post->ID, '_elementor_data' );
 					update_post_meta( $post->ID, '_elementor_data', wp_slash( (string) wp_json_encode( $data ) ) );
 				}
 				break;
@@ -1602,7 +1609,7 @@ trait WPMCP_Builders_Tools {
 			'builder' => $builder['key'],
 			'dry_run' => $dry,
 			'removed' => $removed,
-			'note'    => $dry ? 'Dry run — nothing was removed.' : 'Removed.',
+			'note'    => $dry ? 'Dry run: nothing was removed.' : 'Removed.',
 		];
 	}
 
@@ -1754,7 +1761,10 @@ trait WPMCP_Builders_Tools {
 				if ( ! empty( $args['settings'] ) && is_array( $args['settings'] ) ) {
 					$settings = array_merge( $settings, $args['settings'] );
 				}
-				update_post_meta( $kit_id, '_elementor_page_settings', $settings );
+				WPMCP_Journal::post_meta( $kit_id, '_elementor_page_settings' );
+				// Slashed because update_post_meta() unslashes, which would strip
+				// backslashes from custom CSS or font stacks in the kit settings.
+				update_post_meta( $kit_id, '_elementor_page_settings', wp_slash( $settings ) );
 				$this->flush_builder_cache( $kit_id, 'elementor' );
 				return [
 					'success'  => true,
@@ -1785,7 +1795,23 @@ trait WPMCP_Builders_Tools {
 		}
 
 		if ( 'set' === $action ) {
+			// The user global styles post only exists from WordPress 5.9; on
+			// 5.8 theme.json can be read but not written.
+			if ( ! method_exists( 'WP_Theme_JSON_Resolver', 'get_user_data_from_wp_global_styles' ) ) {
+				WPMCP_Errors::fail(
+					WPMCP_Errors::DEPENDENCY_MISSING,
+					'Writing global styles needs WordPress 5.9 or newer.',
+					sprintf( 'This site runs WordPress %s. Update WordPress, or edit the theme\'s theme.json with the filesystem tools.', get_bloginfo( 'version' ) )
+				);
+			}
 			$user_cpt = WP_Theme_JSON_Resolver::get_user_data_from_wp_global_styles( wp_get_theme(), true );
+			if ( empty( $user_cpt['ID'] ) ) {
+				WPMCP_Errors::fail(
+					WPMCP_Errors::NOT_FOUND,
+					'The global styles record for the active theme could not be found or created.',
+					'Open Appearance > Editor > Styles once so WordPress creates it, then retry.'
+				);
+			}
 			$existing = json_decode( $user_cpt['post_content'] ?? '{}', true );
 			$existing = is_array( $existing ) ? $existing : [];
 			$existing['version'] = $existing['version'] ?? 2;
@@ -1808,6 +1834,7 @@ trait WPMCP_Builders_Tools {
 				);
 			}
 
+			WPMCP_Journal::post_fields( (int) $user_cpt['ID'], [ 'post_content' ] );
 			$result = wp_update_post(
 				[
 					'ID'           => (int) $user_cpt['ID'],
@@ -1866,7 +1893,9 @@ trait WPMCP_Builders_Tools {
 			WPMCP_Errors::fail( WPMCP_Errors::MISSING_ARGUMENT, 'Pass either id or url.' );
 		}
 
-		$response = wp_remote_get(
+		// The safe variant also re-validates every redirect hop, so a public URL
+		// cannot bounce the request on to localhost or a private address.
+		$response = wp_safe_remote_get(
 			$url,
 			[
 				'timeout'     => 30,
@@ -1878,7 +1907,7 @@ trait WPMCP_Builders_Tools {
 			WPMCP_Errors::from_wp_error(
 				$response,
 				WPMCP_Errors::UPSTREAM_FAILED,
-				'The server could not fetch its own page. Some hosts block loopback requests — check the page in a browser instead.'
+				'The server could not fetch its own page. Some hosts block loopback requests, so check the page in a browser instead.'
 			);
 		}
 

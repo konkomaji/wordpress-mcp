@@ -36,7 +36,7 @@ class WPMCP_Settings {
 			],
 			'wc_orders'   => [
 				'label'   => __( 'WooCommerce orders & customers', 'wordpress-mcp' ),
-				'desc'    => __( 'Read and manage orders, order notes, refunds, and customer records. Contains personal data and can move money — leave off unless the engagement covers order operations.', 'wordpress-mcp' ),
+				'desc'    => __( 'Read and manage orders, order notes, refunds, and customer records. Contains personal data and can move money. Leave off unless the engagement covers order operations.', 'wordpress-mcp' ),
 				'default' => false,
 			],
 			'performance' => [
@@ -46,7 +46,7 @@ class WPMCP_Settings {
 			],
 			'builders'    => [
 				'label'   => __( 'Page builders', 'wordpress-mcp' ),
-				'desc'    => __( 'Edit pages in whatever built them — Elementor, Gutenberg blocks, Divi, WPBakery, Beaver Builder. Read the layout as a tree, change individual elements, insert sections, and manage global colours and fonts.', 'wordpress-mcp' ),
+				'desc'    => __( 'Edit pages in whatever built them: Elementor, Gutenberg blocks, Divi, WPBakery, Beaver Builder. Read the layout as a tree, change individual elements, insert sections, and manage global colours and fonts.', 'wordpress-mcp' ),
 				'default' => true,
 			],
 			'appearance'  => [
@@ -66,7 +66,7 @@ class WPMCP_Settings {
 			],
 			'site_mgmt'   => [
 				'label'   => __( 'Site Management', 'wordpress-mcp' ),
-				'desc'    => __( 'Install/activate/deactivate plugins, switch themes, manage users, options, and comments. Powerful — leave off unless you need it.', 'wordpress-mcp' ),
+				'desc'    => __( 'Install/activate/deactivate plugins, switch themes, manage users, options, and comments. Powerful. Leave off unless you need it.', 'wordpress-mcp' ),
 				'default' => false,
 			],
 			'filesystem'  => [
@@ -96,6 +96,7 @@ class WPMCP_Settings {
 			'api_key'         => '',
 			'capabilities'    => $caps,
 			'sitekit_user_id' => 0,
+			'oauth'           => true,
 		];
 	}
 

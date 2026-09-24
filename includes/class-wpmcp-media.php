@@ -2,8 +2,8 @@
 /**
  * Shared media ingest and image processing engine.
  *
- * Every route that puts an image into the library — upload_media, product
- * images, variation images, bulk imports — goes through ingest() so they all
+ * Every route that puts an image into the library (upload_media, product
+ * images, variation images, bulk imports) goes through ingest() so they all
  * get the same behaviour: a validated source, an SEO-friendly filename,
  * duplicate detection, optional downscaling and format conversion, and the
  * full descriptive field set written in one pass.
@@ -43,6 +43,13 @@ class WPMCP_Media {
 	 * optimisation can be undone.
 	 */
 	const BACKUP_META = '_wpmcp_original_file';
+
+	/**
+	 * Largest file accepted from a URL download or a base64 payload, in
+	 * bytes. Without a ceiling one call could fill the temp directory or
+	 * exhaust PHP memory while decoding.
+	 */
+	const MAX_INGEST_BYTES = 26214400; // 25 MB.
 
 	/**
 	 * Load the WordPress media/file admin includes an ingest needs.
@@ -216,13 +223,51 @@ class WPMCP_Media {
 			WPMCP_Errors::fail(
 				WPMCP_Errors::INVALID_ARGUMENT,
 				sprintf( '"%s" is not a fetchable URL.', $url ),
-				'The URL must be absolute, http(s), and resolve to a public host — the server refuses localhost and private ranges.',
+				'The URL must be absolute, http(s), and resolve to a public host; the server refuses localhost and private ranges.',
 				[ 'url' => $url ]
 			);
 		}
-		$tmp = download_url( $url, 60 );
-		if ( is_wp_error( $tmp ) ) {
-			WPMCP_Errors::from_wp_error( $tmp, WPMCP_Errors::UPSTREAM_FAILED, 'Check the URL is publicly reachable from the server, not just from your browser.' );
+		$tmp = wp_tempnam( basename( (string) wp_parse_url( $url, PHP_URL_PATH ) ) );
+		if ( ! $tmp ) {
+			WPMCP_Errors::fail( WPMCP_Errors::IO_FAILED, 'Could not create a temporary file for the download.', 'Check the server temp directory is writable.' );
+		}
+		// Streamed straight to disk and cut off one byte past the ceiling, so an
+		// oversized file is detected without ever being held in memory. The
+		// safe variant also re-validates every redirect hop, so a public URL
+		// cannot bounce the download on to a private address.
+		$response = wp_safe_remote_get(
+			$url,
+			[
+				'timeout'             => 60,
+				'redirection'         => 3,
+				'stream'              => true,
+				'filename'            => $tmp,
+				'limit_response_size' => self::MAX_INGEST_BYTES + 1,
+			]
+		);
+		if ( is_wp_error( $response ) ) {
+			wp_delete_file( $tmp );
+			WPMCP_Errors::from_wp_error( $response, WPMCP_Errors::UPSTREAM_FAILED, 'Check the URL is publicly reachable from the server, not just from your browser.' );
+		}
+		$code = (int) wp_remote_retrieve_response_code( $response );
+		if ( $code < 200 || $code >= 300 ) {
+			wp_delete_file( $tmp );
+			WPMCP_Errors::fail(
+				WPMCP_Errors::UPSTREAM_FAILED,
+				sprintf( 'Downloading %s returned HTTP %d.', $url, $code ),
+				'Check the URL opens the file directly in a browser. Pages that need a login or a cookie cannot be downloaded by the server.',
+				[ 'url' => $url, 'status' => $code ]
+			);
+		}
+		clearstatcache( true, $tmp );
+		$size = (int) @filesize( $tmp ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+		if ( $size > self::MAX_INGEST_BYTES ) {
+			wp_delete_file( $tmp );
+			self::fail_too_large( $size );
+		}
+		if ( 0 === $size ) {
+			wp_delete_file( $tmp );
+			WPMCP_Errors::fail( WPMCP_Errors::UPSTREAM_FAILED, sprintf( 'The download from %s was empty.', $url ), 'Check the URL points at the file itself.' );
 		}
 		$filename = sanitize_file_name( basename( (string) wp_parse_url( $url, PHP_URL_PATH ) ) );
 		if ( '' === $filename || false === strpos( $filename, '.' ) ) {
@@ -264,7 +309,13 @@ class WPMCP_Media {
 		$filename = sanitize_file_name( $filename );
 		self::assert_uploadable_filename( $filename );
 
-		$bytes = base64_decode( preg_replace( '/\s+/', '', $data ), true );
+		// Check the encoded length before decoding: base64 is 4 characters per
+		// 3 bytes, so this refuses an oversized payload without allocating it.
+		$data = preg_replace( '/\s+/', '', $data );
+		if ( (int) floor( strlen( $data ) * 3 / 4 ) > self::MAX_INGEST_BYTES ) {
+			self::fail_too_large( (int) floor( strlen( $data ) * 3 / 4 ) );
+		}
+		$bytes = base64_decode( $data, true );
 		if ( false === $bytes || '' === $bytes ) {
 			WPMCP_Errors::fail(
 				WPMCP_Errors::INVALID_ARGUMENT,
@@ -285,6 +336,21 @@ class WPMCP_Media {
 	}
 
 	/**
+	 * Refuse a file over MAX_INGEST_BYTES.
+	 *
+	 * @param int $bytes Size seen (at least).
+	 * @throws WPMCP_Tool_Exception Always.
+	 */
+	private static function fail_too_large( $bytes ) {
+		WPMCP_Errors::fail(
+			WPMCP_Errors::INVALID_ARGUMENT,
+			sprintf( 'The file is larger than the %d MB limit for uploads through this server.', (int) ( self::MAX_INGEST_BYTES / 1048576 ) ),
+			'Resize or compress the file first, or upload it through the WordPress media library and pass its attachment ID.',
+			[ 'bytes' => (int) $bytes, 'limit' => self::MAX_INGEST_BYTES ]
+		);
+	}
+
+	/**
 	 * Copy a file that is already on the server into a temp file.
 	 *
 	 * Reading arbitrary server paths is a filesystem operation, so it is gated
@@ -297,10 +363,10 @@ class WPMCP_Media {
 	private static function copy_local_path( $path ) {
 		self::bootstrap();
 
-		if ( ! WPMCP_Settings::can( 'filesystem' ) ) {
+		if ( ! wpmcp()->tools->connection_allows( 'filesystem' ) ) {
 			WPMCP_Errors::fail(
 				WPMCP_Errors::CAPABILITY_DISABLED,
-				'Reading an image from a server path needs the Filesystem capability.',
+				'Reading an image from a server path needs the Filesystem capability on this connection.',
 				'Enable the Filesystem group on the WordPress MCP settings screen, or send the image as base64 or a URL instead.',
 				[ 'group' => 'filesystem' ]
 			);
@@ -312,7 +378,7 @@ class WPMCP_Media {
 		$real      = realpath( $candidate );
 		$root      = realpath( ABSPATH );
 
-		if ( ! $real || ! $root || 0 !== strpos( $real, $root ) ) {
+		if ( ! $real || ! $root || 0 !== strpos( wp_normalize_path( $real ), trailingslashit( wp_normalize_path( $root ) ) ) ) {
 			WPMCP_Errors::fail(
 				WPMCP_Errors::PERMISSION_DENIED,
 				'path must point at a file inside the WordPress installation.',
@@ -559,7 +625,9 @@ class WPMCP_Media {
 	public static function apply_fields( $id, $opts ) {
 		$id = (int) $id;
 		if ( isset( $opts['alt'] ) && '' !== (string) $opts['alt'] ) {
-			update_post_meta( $id, '_wp_attachment_image_alt', sanitize_text_field( $opts['alt'] ) );
+			WPMCP_Journal::post_meta( $id, '_wp_attachment_image_alt' );
+			// Slashed because update_post_meta() unslashes.
+			update_post_meta( $id, '_wp_attachment_image_alt', wp_slash( sanitize_text_field( $opts['alt'] ) ) );
 		}
 		$update = [ 'ID' => $id ];
 		if ( isset( $opts['title'] ) && '' !== (string) $opts['title'] ) {
@@ -572,7 +640,9 @@ class WPMCP_Media {
 			$update['post_content'] = wp_kses_post( $opts['description'] );
 		}
 		if ( count( $update ) > 1 ) {
-			wp_update_post( $update );
+			WPMCP_Journal::post_fields( $id, array_keys( array_diff_key( $update, [ 'ID' => 1 ] ) ) );
+			// Slashed because wp_update_post() unslashes.
+			wp_update_post( wp_slash( $update ) );
 		}
 	}
 
@@ -613,7 +683,11 @@ class WPMCP_Media {
 		self::bootstrap();
 
 		$id   = (int) $id;
+		self::assert_attachment( $id );
 		$file = get_attached_file( $id );
+		if ( $file && file_exists( $file ) && ! WPMCP_Util::in_uploads( $file ) ) {
+			WPMCP_Errors::fail( WPMCP_Errors::PERMISSION_DENIED, sprintf( 'The file for attachment %d is outside the uploads folder, so it will not be modified.', $id ) );
+		}
 		if ( ! $file || ! file_exists( $file ) ) {
 			WPMCP_Errors::fail(
 				WPMCP_Errors::NOT_FOUND,
@@ -717,12 +791,24 @@ class WPMCP_Media {
 				continue;
 			}
 			$path = $dir . '/' . basename( $size['file'] );
-			if ( file_exists( $path ) ) {
+			if ( file_exists( $path ) && WPMCP_Util::in_uploads( $path ) ) {
 				@unlink( $path ); // phpcs:ignore WordPress.PHP.NoSilencedErrors
 			}
 		}
-		if ( ! $keep_original && file_exists( $file ) ) {
+		if ( ! $keep_original && file_exists( $file ) && WPMCP_Util::in_uploads( $file ) ) {
 			@unlink( $file ); // phpcs:ignore WordPress.PHP.NoSilencedErrors
+		}
+	}
+
+	/**
+	 * Fail unless an ID is a media library attachment.
+	 *
+	 * @param int $id Post ID.
+	 * @throws WPMCP_Tool_Exception When it is not.
+	 */
+	private static function assert_attachment( $id ) {
+		if ( 'attachment' !== get_post_type( (int) $id ) ) {
+			WPMCP_Errors::fail( WPMCP_Errors::INVALID_ARGUMENT, sprintf( '%d is not a media library attachment.', (int) $id ), 'Pass an attachment ID from list_media.' );
 		}
 	}
 
@@ -737,7 +823,13 @@ class WPMCP_Media {
 		self::bootstrap();
 
 		$id     = (int) $id;
+		self::assert_attachment( $id );
 		$backup = (string) get_post_meta( $id, self::BACKUP_META, true );
+		// The backup path comes from post meta: only trust it when it is an
+		// optimiser backup inside the uploads folder.
+		if ( '' !== $backup && ( ! WPMCP_Util::in_uploads( $backup ) || ! preg_match( '/-wpmcp-original\.[A-Za-z0-9]+$/', $backup ) ) ) {
+			WPMCP_Errors::fail( WPMCP_Errors::PERMISSION_DENIED, sprintf( 'The stored backup for attachment %d is not a valid optimiser backup.', $id ) );
+		}
 		if ( '' === $backup || ! file_exists( $backup ) ) {
 			WPMCP_Errors::fail(
 				WPMCP_Errors::NOT_FOUND,
@@ -754,7 +846,7 @@ class WPMCP_Media {
 		if ( ! copy( $backup, $restore ) ) {
 			WPMCP_Errors::fail( WPMCP_Errors::IO_FAILED, 'Could not restore the original file.' );
 		}
-		if ( $current && $current !== $restore ) {
+		if ( $current && $current !== $restore && WPMCP_Util::in_uploads( $current ) ) {
 			self::delete_generated_sizes( $current, (array) wp_get_attachment_metadata( $id ) );
 		}
 

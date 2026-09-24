@@ -35,6 +35,6 @@ wp-cli.local.yml
 .env
 .env.*
 
-# Original single-client connector — not part of this plugin
+# Original single-client connector: not part of this plugin
 hutke-mcp-connector.php
 memeory.txt

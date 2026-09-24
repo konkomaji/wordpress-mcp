@@ -3,7 +3,7 @@
  * Media library tools: optimisation, thumbnail regeneration, duplicate and
  * orphan detection, and bulk alt text.
  *
- * Part of the `content` capability group — these read and write the media
+ * Part of the `content` capability group, since these read and write the media
  * library, which is content.
  *
  * @package WordPressMCP
@@ -32,7 +32,7 @@ trait WPMCP_Media_Tools {
 				'inputSchema' => [
 					'type'       => 'object',
 					'properties' => [
-						'ids'               => [ 'type' => 'array', 'description' => 'Attachment IDs to optimise. Omit to sweep the largest images automatically.' ],
+						'ids'               => [ 'type' => 'array', 'items' => [ 'type' => 'integer' ], 'description' => 'Attachment IDs to optimise. Omit to sweep the largest images automatically.' ],
 						'min_kb'            => [ 'type' => 'integer', 'description' => 'When sweeping, only touch files above this size. Default 200.' ],
 						'limit'             => [ 'type' => 'integer', 'description' => 'When sweeping, how many images to process. Default 25, max 200.' ],
 						'max_dimension'     => [ 'type' => 'integer', 'description' => 'Downscale so neither side exceeds this many pixels. Default 2000. Pass 0 to leave dimensions alone.' ],
@@ -47,12 +47,12 @@ trait WPMCP_Media_Tools {
 			[
 				'group'       => 'content',
 				'name'        => 'get_image_bytes',
-				'description' => 'Return an image from the media library as an inline picture, so it can actually be looked at rather than described. Use it before writing alt text, product descriptions or captions — alt text written from a filename is a guess, alt text written from the image is not. Also the way to check the right photo is on the right product. Images are downscaled and re-encoded for transfer; the original is untouched.',
+				'description' => 'Return an image from the media library as an inline picture, so it can actually be looked at rather than described. Use it before writing alt text, product descriptions or captions: alt text written from a filename is a guess, alt text written from the image is not. Also the way to check the right photo is on the right product. Images are downscaled and re-encoded for transfer; the original is untouched.',
 				'inputSchema' => [
 					'type'       => 'object',
 					'properties' => [
 						'id'            => [ 'type' => 'integer', 'description' => 'Attachment ID.' ],
-						'ids'           => [ 'type' => 'array', 'description' => 'Several attachment IDs, up to 5.' ],
+						'ids'           => [ 'type' => 'array', 'items' => [ 'type' => 'integer' ], 'description' => 'Several attachment IDs, up to 5.' ],
 						'post_id'       => [ 'type' => 'integer', 'description' => 'Fetch this post or product\'s featured image instead.' ],
 						'product_id'    => [ 'type' => 'integer', 'description' => 'Fetch a product\'s main image and gallery.' ],
 						'max_dimension' => [ 'type' => 'integer', 'description' => 'Longest side in pixels. Default 768, max 1536. Smaller is faster and usually enough.' ],
@@ -75,11 +75,11 @@ trait WPMCP_Media_Tools {
 			[
 				'group'       => 'content',
 				'name'        => 'regenerate_thumbnails',
-				'description' => 'Rebuild the generated image sizes for attachments — the fix after switching themes, changing image size settings, or optimising originals. Processes a batch at a time and returns the offset to continue from.',
+				'description' => 'Rebuild the generated image sizes for attachments: the fix after switching themes, changing image size settings, or optimising originals. Processes a batch at a time and returns the offset to continue from.',
 				'inputSchema' => [
 					'type'       => 'object',
 					'properties' => [
-						'ids'            => [ 'type' => 'array', 'description' => 'Specific attachment IDs. Omit to walk the whole library.' ],
+						'ids'            => [ 'type' => 'array', 'items' => [ 'type' => 'integer' ], 'description' => 'Specific attachment IDs. Omit to walk the whole library.' ],
 						'parent_post_id' => [ 'type' => 'integer', 'description' => 'Only attachments belonging to this post or product.' ],
 						'offset'         => [ 'type' => 'integer', 'description' => 'Where to resume a library-wide run. Default 0.' ],
 						'limit'          => [ 'type' => 'integer', 'description' => 'Images per batch. Default 25, max 100.' ],
@@ -90,7 +90,7 @@ trait WPMCP_Media_Tools {
 			[
 				'group'       => 'content',
 				'name'        => 'find_duplicate_media',
-				'description' => 'Find images stored more than once — identical bytes uploaded under different names, which is what happens when the same product photo is imported repeatedly. Groups them by content hash and names the copy worth keeping (the one actually in use).',
+				'description' => 'Find images stored more than once: identical bytes uploaded under different names, which is what happens when the same product photo is imported repeatedly. Groups them by content hash and names the copy worth keeping (the one actually in use).',
 				'inputSchema' => [
 					'type'       => 'object',
 					'properties' => [
@@ -102,7 +102,7 @@ trait WPMCP_Media_Tools {
 			[
 				'group'       => 'content',
 				'name'        => 'find_unused_media',
-				'description' => 'Find attachments nothing references: not a featured image, not in a product gallery, not embedded in any post content or page-builder layout. Also flags database rows whose file is missing from disk. Read-only — it reports, it does not delete.',
+				'description' => 'Find attachments nothing references: not a featured image, not in a product gallery, not embedded in any post content or page-builder layout. Also flags database rows whose file is missing from disk. Read-only: it reports but does not delete.',
 				'inputSchema' => [
 					'type'       => 'object',
 					'properties' => [
@@ -115,7 +115,7 @@ trait WPMCP_Media_Tools {
 			[
 				'group'       => 'content',
 				'name'        => 'bulk_set_image_alt',
-				'description' => 'Write alt text across many images at once from a template. Placeholders: {title}, {filename}, {parent_title}, {caption}, {site}, {category}. Targets images with no alt by default — the single biggest accessibility and image-SEO gap on most sites. Dry run by default.',
+				'description' => 'Write alt text across many images at once from a template. Placeholders: {title}, {filename}, {parent_title}, {caption}, {site}, {category}. Targets images with no alt by default (the single biggest accessibility and image-SEO gap on most sites). Dry run by default.',
 				'inputSchema' => [
 					'type'       => 'object',
 					'properties' => [
@@ -147,7 +147,7 @@ trait WPMCP_Media_Tools {
 			WPMCP_Errors::fail(
 				WPMCP_Errors::INVALID_ARGUMENT,
 				sprintf( '"%s" is not a format this tool can write.', $convert ),
-				'Use webp, avif, jpg or png — or omit convert to keep the current format.',
+				'Use webp, avif, jpg or png, or omit convert to keep the current format.',
 				[ 'accepted' => [ 'webp', 'avif', 'jpg', 'png' ] ]
 			);
 		}
@@ -203,13 +203,14 @@ trait WPMCP_Media_Tools {
 				'dry_run'   => true,
 				'count'     => count( $planned ),
 				'planned'   => $planned,
-				'message'   => 'Dry run — nothing was changed. Review the list, then call again with dry_run=false.',
+				'message'   => 'Dry run: nothing was changed. Review the list, then call again with dry_run=false.',
 				'next_step' => '' !== $convert
-					? 'Converting changes each file URL. Pass update_references=true to rewrite the old URLs in content, or leave it off — the original file stays on disk so existing references keep working.'
+					? 'Converting changes each file URL. Pass update_references=true to rewrite the old URLs in content, or leave it off; the original file stays on disk so existing references keep working.'
 					: 'Call again with dry_run=false to apply.',
 			];
 		}
 
+		WPMCP_Journal::note( 'Image files rewritten by optimize_image are not restored by undo_operation. Use restore_image on each attachment, which puts back the backed-up original.' );
 		$opts = [
 			'max_dimension' => $max,
 			'convert'       => $convert,
@@ -347,7 +348,7 @@ trait WPMCP_Media_Tools {
 		return [
 			'posts_updated'          => $content_rows,
 			'elementor_rows_updated' => $meta_rows,
-			'note'                   => 'Post content and Elementor layouts were rewritten. Serialised theme or builder meta was not touched — check those manually if an image is still missing.',
+			'note'                   => 'Post content and Elementor layouts were rewritten. Serialised theme or builder meta was not touched. Check those manually if an image is still missing.',
 		];
 	}
 
@@ -424,7 +425,7 @@ trait WPMCP_Media_Tools {
 			WPMCP_Errors::fail(
 				WPMCP_Errors::IO_FAILED,
 				'None of the requested images could be read.',
-				'The files may be missing from disk — find_unused_media lists attachments in that state.',
+				'The files may be missing from disk; find_unused_media lists attachments in that state.',
 				[ 'problems' => $problems ]
 			);
 		}
@@ -548,7 +549,7 @@ trait WPMCP_Media_Tools {
 
 		foreach ( $ids as $id ) {
 			if ( WPMCP_Progress::should_stop() ) {
-				$skipped[] = [ 'id' => (int) $id, 'reason' => 'ran out of execution time — resume from next_offset' ];
+				$skipped[] = [ 'id' => (int) $id, 'reason' => 'ran out of execution time; resume from next_offset' ];
 				break;
 			}
 			WPMCP_Progress::tick( 1, (string) $id );
@@ -803,7 +804,7 @@ trait WPMCP_Media_Tools {
 			'reclaimable_bytes'=> $bytes,
 			'reclaimable'      => size_format( $bytes ),
 			'next_offset'      => $next < (int) $q->found_posts ? $next : null,
-			'caveat'           => 'Detection covers featured images, product galleries, post content and common builder layouts. An image used only from a theme option, a widget, or a CSS file will look unused here — check before deleting.',
+			'caveat'           => 'Detection covers featured images, product galleries, post content and common builder layouts. An image used only from a theme option, a widget, or a CSS file will look unused here, so check before deleting.',
 			'next_step'        => $next < (int) $q->found_posts ? sprintf( 'Call again with offset=%d for the next batch.', $next ) : 'Scan complete.',
 		];
 	}
@@ -877,7 +878,7 @@ trait WPMCP_Media_Tools {
 			];
 			if ( ! $dry ) {
 				WPMCP_Journal::post_meta( (int) $id, '_wp_attachment_image_alt' );
-				update_post_meta( (int) $id, '_wp_attachment_image_alt', $alt );
+				update_post_meta( (int) $id, '_wp_attachment_image_alt', wp_slash( $alt ) );
 				$written++;
 			}
 		}
@@ -893,7 +894,7 @@ trait WPMCP_Media_Tools {
 			'changes'     => $planned,
 			'next_offset' => $next < (int) $q->found_posts ? $next : null,
 			'next_step'   => $dry
-				? 'Dry run — nothing was written. Check the alt text reads naturally, then call again with dry_run=false.'
+				? 'Dry run: nothing was written. Check the alt text reads naturally, then call again with dry_run=false.'
 				: ( $next < (int) $q->found_posts ? sprintf( 'Call again with offset=%d for the next batch.', $next ) : 'All matching images now have alt text.' ),
 		];
 	}

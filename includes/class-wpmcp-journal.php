@@ -1,6 +1,6 @@
 <?php
 /**
- * Operation journal — the undo layer.
+ * Operation journal: the undo layer.
  *
  * Files have backups and posts have revisions, but a bulk reprice, a site-wide
  * search-and-replace or a batch of SEO writes had nothing behind them. Every
@@ -73,6 +73,8 @@ class WPMCP_Journal {
 			'records'   => [],
 			'complete'  => true,
 			'notes'     => [],
+			'label'     => '',
+			'key_id'    => WPMCP_Keys::current() ? WPMCP_Keys::current()['id'] : '',
 		];
 		self::$seen = [];
 	}
@@ -104,7 +106,10 @@ class WPMCP_Journal {
 		$op = self::$current;
 		self::discard();
 
-		if ( ! $op || ! $op['records'] ) {
+		// An operation with only notes is still stored: those notes say what
+		// the call changed that undo cannot put back, and dropping them would
+		// leave the change looking as if it never happened.
+		if ( ! $op || ( ! $op['records'] && ! $op['notes'] ) ) {
 			return '';
 		}
 
@@ -123,6 +128,9 @@ class WPMCP_Journal {
 				'time'     => $op['started'],
 				'changes'  => count( $op['records'] ),
 				'complete' => $op['complete'],
+				'notes'    => $op['notes'],
+				'label'    => $op['label'] ?? '',
+				'key_id'   => $op['key_id'] ?? '',
 				'undone'   => false,
 				'args'     => $op['args'],
 			]
@@ -134,13 +142,28 @@ class WPMCP_Journal {
 	}
 
 	/**
-	 * Add a free-text note to the current operation.
+	 * Record something the current operation changed that undo cannot put
+	 * back, e.g. "Users changed by save_user are not restored by undo." Undo
+	 * reports these notes and treats the restore as partial, so nobody is told
+	 * everything was reverted when it was not.
 	 *
 	 * @param string $note Note.
 	 */
 	public static function note( $note ) {
-		if ( self::$current && count( self::$current['notes'] ) < 20 ) {
+		if ( self::$current && count( self::$current['notes'] ) < 20 && ! in_array( (string) $note, self::$current['notes'], true ) ) {
 			self::$current['notes'][] = (string) $note;
+		}
+	}
+
+	/**
+	 * Attach a human label to the current operation, such as a restore point
+	 * name. Unlike a note, a label does not mark the undo as partial.
+	 *
+	 * @param string $label Label.
+	 */
+	public static function label( $label ) {
+		if ( self::$current ) {
+			self::$current['label'] = (string) $label;
 		}
 	}
 
@@ -199,8 +222,14 @@ class WPMCP_Journal {
 	}
 
 	/**
-	 * Snapshot the normalised SEO field set for a post, whichever engine is
-	 * active, so an SEO write can be reversed without knowing the meta keys.
+	 * Snapshot the SEO plugin's own meta keys for a post, whichever engine is
+	 * active, so an SEO write can be reversed without the caller knowing them.
+	 *
+	 * The raw keys are recorded rather than the normalised field set: replaying
+	 * normalised fields through set_post_seo() wrote every field back, which
+	 * created overrides that never existed (Yoast noindex=2, an explicit
+	 * "index" robots entry in Rank Math). Raw keys put back exactly what was
+	 * there, and delete what was not.
 	 *
 	 * @param int $post_id Post ID.
 	 */
@@ -209,16 +238,57 @@ class WPMCP_Journal {
 			return;
 		}
 		$post_id = (int) $post_id;
-		$seo     = WPMCP_SEO::get_post_seo( $post_id );
-		unset( $seo['provider'] );
+		$meta    = [];
+		foreach ( WPMCP_SEO::post_meta_keys() as $key ) {
+			$exists        = metadata_exists( 'post', $post_id, $key );
+			$meta[ $key ] = [
+				'existed' => $exists,
+				'value'   => $exists ? get_post_meta( $post_id, $key, true ) : null,
+			];
+		}
+		// One record per post rather than one per key, so a restore point over
+		// a few hundred posts stays inside MAX_RECORDS.
 		self::push(
 			'seo:' . $post_id,
 			[
-				'type'   => 'post_seo',
-				'id'     => $post_id,
-				'fields' => $seo,
+				'type' => 'post_meta_set',
+				'id'   => $post_id,
+				'meta' => $meta,
 			]
 		);
+	}
+
+	/**
+	 * Snapshot a term's SEO storage before it is written: term meta for Rank
+	 * Math, or the single wpseo_taxonomy_meta option Yoast keeps for all terms.
+	 *
+	 * @param int    $term_id  Term ID.
+	 * @param string $taxonomy Taxonomy slug (unused for Rank Math).
+	 */
+	public static function term_seo( $term_id, $taxonomy = '' ) {
+		if ( null === self::$current ) {
+			return;
+		}
+		unset( $taxonomy );
+		if ( 'rankmath' === WPMCP_SEO::provider() ) {
+			foreach ( WPMCP_SEO::term_meta_keys() as $key ) {
+				self::term_meta( (int) $term_id, $key );
+			}
+			return;
+		}
+		self::option( 'wpseo_taxonomy_meta' );
+	}
+
+	/**
+	 * Ask undo to rebuild the rewrite rules once everything else is restored.
+	 * Call this BEFORE snapshotting the options that shape the rules: records
+	 * are replayed newest first, so an earlier record runs last.
+	 */
+	public static function rewrite_flush() {
+		if ( null === self::$current ) {
+			return;
+		}
+		self::push( 'rewrite_flush', [ 'type' => 'rewrite_flush', 'id' => 0 ] );
 	}
 
 	/**
@@ -389,7 +459,7 @@ class WPMCP_Journal {
 			WPMCP_Errors::fail(
 				WPMCP_Errors::NOT_FOUND,
 				sprintf( 'No operation "%s" is stored.', $id ),
-				'Call list_operations to see what can still be undone — only the most recent ' . self::KEEP . ' are kept.',
+				'Call list_operations to see what can still be undone. Only the most recent ' . self::KEEP . ' are kept.',
 				[ 'id' => $id ]
 			);
 		}
@@ -438,12 +508,19 @@ class WPMCP_Journal {
 		}
 		self::write_index( $index );
 
+		$notes = isset( $op['notes'] ) && is_array( $op['notes'] ) ? array_values( $op['notes'] ) : [];
+
 		return [
-			'id'       => $id,
-			'tool'     => $op['tool'],
-			'restored' => $restored,
-			'failed'   => $failed,
-			'partial'  => empty( $op['complete'] ),
+			'id'           => $id,
+			'tool'         => $op['tool'],
+			'restored'     => $restored,
+			'failed'       => $failed,
+			// Partial whenever something is still as the operation left it: the
+			// recording overflowed, a record failed, or the tool noted changes
+			// that have no revert record at all.
+			'partial'      => empty( $op['complete'] ) || $failed || $notes,
+			'truncated'    => empty( $op['complete'] ),
+			'not_restored' => $notes,
 		];
 	}
 
@@ -470,8 +547,34 @@ class WPMCP_Journal {
 				}
 				break;
 
+			case 'post_meta_set':
+				foreach ( (array) $record['meta'] as $key => $entry ) {
+					if ( empty( $entry['existed'] ) ) {
+						delete_post_meta( (int) $record['id'], $key );
+					} else {
+						update_post_meta( (int) $record['id'], $key, wp_slash( $entry['value'] ) );
+					}
+				}
+				break;
+
 			case 'post_seo':
+				// Legacy record from before raw SEO keys were snapshotted.
 				WPMCP_SEO::set_post_seo( (int) $record['id'], $record['fields'] );
+				break;
+
+			case 'rewrite_flush':
+				// The restored permalink options are only read by WP_Rewrite
+				// on init, so re-initialise it and do a hard flush (which also
+				// rewrites .htaccess where there is one). Taxonomy and post
+				// type permastructs were registered at init with the old
+				// front, though, so the stored rules are then dropped and
+				// WordPress rebuilds them cleanly on the next request.
+				global $wp_rewrite;
+				if ( $wp_rewrite instanceof WP_Rewrite ) {
+					$wp_rewrite->init();
+				}
+				flush_rewrite_rules();
+				delete_option( 'rewrite_rules' );
 				break;
 
 			case 'post':
@@ -488,11 +591,19 @@ class WPMCP_Journal {
 
 			case 'product':
 				if ( ! function_exists( 'wc_get_product' ) ) {
-					throw new Exception( 'WooCommerce is not active, so the product cannot be restored.' );
+					WPMCP_Errors::fail(
+						WPMCP_Errors::DEPENDENCY_MISSING,
+						'WooCommerce is not active, so the product cannot be restored.',
+						'Activate WooCommerce and run undo_operation again.'
+					);
 				}
 				$product = wc_get_product( (int) $record['id'] );
 				if ( ! $product ) {
-					throw new Exception( 'The product no longer exists.' );
+					WPMCP_Errors::fail(
+						WPMCP_Errors::NOT_FOUND,
+						sprintf( 'Product %d no longer exists, so it cannot be restored.', (int) $record['id'] ),
+						'The rest of the operation is still restored. Recreate the product if it is needed.'
+					);
 				}
 				foreach ( $record['fields'] as $field => $value ) {
 					$setter = 'set_' . $field;

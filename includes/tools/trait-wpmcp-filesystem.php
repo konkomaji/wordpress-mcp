@@ -1,6 +1,6 @@
 <?php
 /**
- * Filesystem tools — reading and editing theme/plugin code from Claude Code.
+ * Filesystem tools: reading and editing theme/plugin code from a coding agent.
  *
  * Two safety rails run through everything here, because writing PHP to a live
  * site is the one action in this plugin that can take the whole site (and this
@@ -9,7 +9,7 @@
  *   1. PHP source is parsed before it is written. A syntax error becomes a
  *      tool error instead of a fatal white screen.
  *   2. Every destructive write keeps a timestamped backup, restorable with
- *      restore_file — so recovery does not need FTP.
+ *      restore_file, so recovery does not need FTP.
  *
  * @package WordPressMCP
  */
@@ -76,7 +76,7 @@ trait WPMCP_Filesystem_Tools {
 			[
 				'group'       => 'filesystem',
 				'name'        => 'edit_file',
-				'description' => 'Targeted in-place edit of a UTF-8 text file — no need to resend the whole file. mode=replace (default) swaps an exact old_string for new_string; old_string must match exactly once unless replace_all=true. mode=append/prepend adds text without needing a match. PHP is syntax-checked and a backup is kept before writing.',
+				'description' => 'Targeted in-place edit of a UTF-8 text file, with no need to resend the whole file. mode=replace (default) swaps an exact old_string for new_string; old_string must match exactly once unless replace_all=true. mode=append/prepend adds text without needing a match. PHP is syntax-checked and a backup is kept before writing.',
 				'inputSchema' => [
 					'type'       => 'object',
 					'properties' => [
@@ -93,14 +93,14 @@ trait WPMCP_Filesystem_Tools {
 			[
 				'group'       => 'filesystem',
 				'name'        => 'search_files',
-				'description' => 'Search file contents across the install for a string or regular expression — the fast way to find which theme or plugin file defines a function, hook, or bit of markup. Returns file, line number, and the matching line.',
+				'description' => 'Search file contents across the install for a string or regular expression, the fast way to find which theme or plugin file defines a function, hook, or bit of markup. Returns file, line number, and the matching line.',
 				'inputSchema' => [
 					'type'       => 'object',
 					'properties' => [
 						'query'      => [ 'type' => 'string', 'description' => 'Text or regex body to find.' ],
 						'path'       => [ 'type' => 'string', 'description' => "Directory to search, relative to WP root. Default 'wp-content'." ],
 						'regex'      => [ 'type' => 'boolean', 'description' => 'Treat query as a regular expression. Default false.' ],
-						'extensions' => [ 'type' => 'array', 'description' => "File extensions to search. Default ['php','js','css','html','txt','json']." ],
+						'extensions' => [ 'type' => 'array', 'items' => [ 'type' => 'string' ], 'description' => "File extensions to search. Default ['php','js','css','html','txt','json']." ],
 						'max_results'=> [ 'type' => 'integer', 'description' => 'Default 100, max 500.' ],
 						'max_files'  => [ 'type' => 'integer', 'description' => 'Files to scan before stopping. Default 3000.' ],
 					],
@@ -162,7 +162,7 @@ trait WPMCP_Filesystem_Tools {
 			[
 				'group'       => 'filesystem',
 				'name'        => 'file_info',
-				'description' => 'Details for one path: existence, size, permissions, writability, modification time, line count, and — for PHP — whether it currently parses.',
+				'description' => 'Details for one path: existence, size, permissions, writability, modification time, line count, and (for PHP) whether it currently parses.',
 				'inputSchema' => [
 					'type'       => 'object',
 					'properties' => [ 'path' => [ 'type' => 'string' ] ],
@@ -184,12 +184,12 @@ trait WPMCP_Filesystem_Tools {
 			[
 				'group'       => 'filesystem',
 				'name'        => 'restore_file',
-				'description' => 'Restore a file from one of the automatic backups — the undo for a bad edit. Pass the backup_id from list_backups, or just a path to restore its most recent backup.',
+				'description' => 'Restore a file from one of the automatic backups (the undo for a bad edit). Pass the backup_id from list_backups, or just a path to restore its most recent backup.',
 				'inputSchema' => [
 					'type'       => 'object',
 					'properties' => [
 						'backup_id' => [ 'type' => 'string', 'description' => 'Backup identifier from list_backups.' ],
-						'path'      => [ 'type' => 'string', 'description' => 'Original path — restores its newest backup.' ],
+						'path'      => [ 'type' => 'string', 'description' => 'Original path. Restores its newest backup.' ],
 					],
 				],
 			],
@@ -307,6 +307,48 @@ trait WPMCP_Filesystem_Tools {
 	 * ===================================================================== */
 
 	/**
+	 * Whether a path holds credentials: wp-config.php (database password,
+	 * salts), environment files, private keys, and this plugin's backups.
+	 *
+	 * @param string $path Absolute path.
+	 * @return bool
+	 */
+	private function is_secret_file( $path ) {
+		$path = wp_normalize_path( (string) $path );
+		$name = strtolower( basename( $path ) );
+		if ( 'wp-config.php' === $name || 0 === strpos( $name, '.env' ) || in_array( $name, [ '.htpasswd', 'auth.json', '.git-credentials' ], true ) ) {
+			return true;
+		}
+		if ( preg_match( '/\.(pem|key|p12|pfx)$/', $name ) ) {
+			return true;
+		}
+		return false !== strpos( $path, '/wpmcp-backups' );
+	}
+
+	/**
+	 * Fail when a path holds credentials. Sites that need an agent to read
+	 * one can allow it with the wpmcp_allow_secret_file filter.
+	 *
+	 * @param string $path Absolute path.
+	 * @throws WPMCP_Tool_Exception When the file is a secret.
+	 */
+	private function refuse_secret_file( $path ) {
+		/**
+		 * Allow reading a file WordPress MCP treats as a secret.
+		 *
+		 * @param bool   $allow Default false.
+		 * @param string $path  Absolute path.
+		 */
+		if ( $this->is_secret_file( $path ) && ! apply_filters( 'wpmcp_allow_secret_file', false, $path ) ) {
+			WPMCP_Errors::fail(
+				WPMCP_Errors::PERMISSION_DENIED,
+				sprintf( '%s holds credentials and cannot be read through WordPress MCP.', $this->relative_path( $path ) ),
+				'Ask for specific settings instead (site_info, get_option), or have the site owner allow it with the wpmcp_allow_secret_file filter.'
+			);
+		}
+	}
+
+	/**
 	 * Directory holding automatic backups, created on first use and protected
 	 * from direct web access.
 	 *
@@ -315,7 +357,18 @@ trait WPMCP_Filesystem_Tools {
 	 */
 	private function backup_dir() {
 		$uploads = wp_upload_dir();
-		$dir     = trailingslashit( $uploads['basedir'] ) . 'wpmcp-backups';
+		$base    = trailingslashit( $uploads['basedir'] );
+		// The directory name carries a random token, so the location cannot be
+		// guessed on servers that ignore .htaccess (nginx, IIS without rules).
+		$token = (string) get_option( 'wpmcp_backup_token', '' );
+		if ( '' === $token ) {
+			$token = strtolower( wp_generate_password( 20, false, false ) );
+			update_option( 'wpmcp_backup_token', $token, false );
+		}
+		$dir = $base . 'wpmcp-backups-' . $token;
+		if ( ! is_dir( $dir ) && is_dir( $base . 'wpmcp-backups' ) ) {
+			@rename( $base . 'wpmcp-backups', $dir ); // phpcs:ignore WordPress.PHP.NoSilencedErrors -- move backups made before 2.0.0.
+		}
 		if ( ! is_dir( $dir ) && ! wp_mkdir_p( $dir ) ) {
 			WPMCP_Errors::fail(
 				WPMCP_Errors::IO_FAILED,
@@ -323,12 +376,15 @@ trait WPMCP_Filesystem_Tools {
 				'Check that the uploads directory is writable, or pass backup=false to skip backups.'
 			);
 		}
-		// Backups are copies of source code — keep them out of the web root.
+		// Backups are copies of source code, so keep them out of the web root.
 		if ( ! file_exists( $dir . '/.htaccess' ) ) {
 			@file_put_contents( $dir . '/.htaccess', "Order deny,allow\nDeny from all\n" ); // phpcs:ignore
 		}
 		if ( ! file_exists( $dir . '/index.php' ) ) {
 			@file_put_contents( $dir . '/index.php', "<?php\n// Silence is golden.\n" ); // phpcs:ignore
+		}
+		if ( ! file_exists( $dir . '/web.config' ) ) {
+			@file_put_contents( $dir . '/web.config', "<?xml version=\"1.0\"?>\n<configuration><system.webServer><authorization><deny users=\"*\" /></authorization></system.webServer></configuration>\n" ); // phpcs:ignore
 		}
 		return $dir;
 	}
@@ -346,10 +402,10 @@ trait WPMCP_Filesystem_Tools {
 		$dir       = $this->backup_dir();
 		$relative  = $this->relative_path( $absolute );
 		$stamp     = gmdate( 'Ymd-His' );
-		$id        = substr( md5( $relative ), 0, 8 ) . '-' . $stamp;
+		$id        = substr( md5( $relative ), 0, 8 ) . '-' . $stamp . '-' . strtolower( wp_generate_password( 10, false, false ) );
 		$target    = $dir . '/' . $id . '.bak';
 		if ( ! copy( $absolute, $target ) ) {
-			WPMCP_Errors::fail( WPMCP_Errors::IO_FAILED, 'Could not write the backup — aborting rather than overwriting without one.' );
+			WPMCP_Errors::fail( WPMCP_Errors::IO_FAILED, 'Could not write the backup. Aborting rather than overwriting without one.' );
 		}
 		$index               = get_option( 'wpmcp_file_backups', [] );
 		$index               = is_array( $index ) ? $index : [];
@@ -390,7 +446,7 @@ trait WPMCP_Filesystem_Tools {
 		if ( true !== $error ) {
 			WPMCP_Errors::fail(
 				WPMCP_Errors::INVALID_ARGUMENT,
-				'Refusing to write: the PHP would not parse — ' . $error,
+				'Refusing to write because the PHP would not parse: ' . $error,
 				'Fix the syntax and try again. Writing this would have taken the site down, including this MCP endpoint.',
 				[ 'parse_error' => $error, 'path' => $this->relative_path( $path ) ]
 			);
@@ -474,6 +530,7 @@ trait WPMCP_Filesystem_Tools {
 	 */
 	private function tool_read_file( $args ) {
 		$path = $this->safe_path( $args['path'] );
+		$this->refuse_secret_file( $path );
 		if ( ! is_file( $path ) ) {
 			WPMCP_Errors::fail(
 				WPMCP_Errors::NOT_FOUND,
@@ -483,7 +540,7 @@ trait WPMCP_Filesystem_Tools {
 		}
 		$content = file_get_contents( $path );
 		if ( false === $content ) {
-			WPMCP_Errors::fail( WPMCP_Errors::IO_FAILED, 'Could not read the file — check permissions.' );
+			WPMCP_Errors::fail( WPMCP_Errors::IO_FAILED, 'Could not read the file. Check permissions.' );
 		}
 		if ( ! mb_check_encoding( $content, 'UTF-8' ) ) {
 			return [
@@ -539,13 +596,13 @@ trait WPMCP_Filesystem_Tools {
 
 		$dir = dirname( $path );
 		if ( ! is_dir( $dir ) && ! wp_mkdir_p( $dir ) ) {
-			WPMCP_Errors::fail( WPMCP_Errors::IO_FAILED, 'Could not create the parent directory — check permissions.' );
+			WPMCP_Errors::fail( WPMCP_Errors::IO_FAILED, 'Could not create the parent directory. Check permissions.' );
 		}
 		$bytes = file_put_contents( $path, $data );
 		if ( false === $bytes ) {
 			WPMCP_Errors::fail(
 				WPMCP_Errors::IO_FAILED,
-				'Write failed — check file permissions.',
+				'Write failed. Check file permissions.',
 				'The web server user needs write access to ' . $this->relative_path( $dir ) . '.'
 			);
 		}
@@ -596,7 +653,7 @@ trait WPMCP_Filesystem_Tools {
 				WPMCP_Errors::fail(
 					WPMCP_Errors::NOT_FOUND,
 					'old_string was not found in the file.',
-					'Read the file first — whitespace and indentation must match exactly.'
+					'Read the file first: whitespace and indentation must match exactly.'
 				);
 			}
 			if ( WPMCP_Util::bool( $args['replace_all'] ?? null ) ) {
@@ -624,7 +681,7 @@ trait WPMCP_Filesystem_Tools {
 
 		$bytes = file_put_contents( $path, $updated );
 		if ( false === $bytes ) {
-			WPMCP_Errors::fail( WPMCP_Errors::IO_FAILED, 'Write failed — check file permissions.' );
+			WPMCP_Errors::fail( WPMCP_Errors::IO_FAILED, 'Write failed. Check file permissions.' );
 		}
 		return [
 			'success'       => true,
@@ -671,7 +728,7 @@ trait WPMCP_Filesystem_Tools {
 				$stopped = true;
 				break;
 			}
-			if ( ! $file->isFile() ) {
+			if ( ! $file->isFile() || $this->is_secret_file( $file->getPathname() ) ) {
 				continue;
 			}
 			$ext = strtolower( $file->getExtension() );
@@ -722,6 +779,7 @@ trait WPMCP_Filesystem_Tools {
 	 */
 	private function tool_copy_file( $args ) {
 		$src = $this->safe_path( $args['path'] );
+		$this->refuse_secret_file( $src );
 		if ( ! file_exists( $src ) ) {
 			WPMCP_Errors::fail( WPMCP_Errors::NOT_FOUND, 'Source not found: ' . $this->relative_path( $src ) );
 		}
@@ -740,7 +798,7 @@ trait WPMCP_Filesystem_Tools {
 		if ( is_dir( $src ) ) {
 			$this->copy_tree( $src, $dest );
 		} elseif ( ! copy( $src, $dest ) ) {
-			WPMCP_Errors::fail( WPMCP_Errors::IO_FAILED, 'Copy failed — check permissions.' );
+			WPMCP_Errors::fail( WPMCP_Errors::IO_FAILED, 'Copy failed. Check permissions.' );
 		}
 		return [ 'success' => true, 'path' => $this->relative_path( $dest ) ];
 	}
@@ -783,7 +841,7 @@ trait WPMCP_Filesystem_Tools {
 			WPMCP_Errors::fail( WPMCP_Errors::CONFLICT, 'A file already exists at that path.' );
 		}
 		if ( ! wp_mkdir_p( $path ) ) {
-			WPMCP_Errors::fail( WPMCP_Errors::IO_FAILED, 'Could not create the directory — check permissions.' );
+			WPMCP_Errors::fail( WPMCP_Errors::IO_FAILED, 'Could not create the directory. Check permissions.' );
 		}
 		return [ 'success' => true, 'path' => $this->relative_path( $path ) ];
 	}
@@ -806,7 +864,7 @@ trait WPMCP_Filesystem_Tools {
 			WPMCP_Errors::fail( WPMCP_Errors::IO_FAILED, 'Could not create the destination directory.' );
 		}
 		if ( ! @rename( $src, $dest ) ) { // phpcs:ignore
-			WPMCP_Errors::fail( WPMCP_Errors::IO_FAILED, 'Move failed — check permissions.' );
+			WPMCP_Errors::fail( WPMCP_Errors::IO_FAILED, 'Move failed. Check permissions.' );
 		}
 		return [ 'success' => true, 'path' => $this->relative_path( $dest ) ];
 	}
@@ -825,7 +883,7 @@ trait WPMCP_Filesystem_Tools {
 					WPMCP_Errors::fail(
 						WPMCP_Errors::CONFLICT,
 						'That directory is not empty.',
-						'Set recursive=true to delete it and everything inside — this cannot be undone.'
+						'Set recursive=true to delete it and everything inside. This cannot be undone.'
 					);
 				}
 				if ( ! rmdir( $path ) ) {
@@ -845,7 +903,7 @@ trait WPMCP_Filesystem_Tools {
 			$backup = $this->backup_file( $path );
 		}
 		if ( ! unlink( $path ) ) {
-			WPMCP_Errors::fail( WPMCP_Errors::IO_FAILED, 'Delete failed — check file permissions.' );
+			WPMCP_Errors::fail( WPMCP_Errors::IO_FAILED, 'Delete failed. Check file permissions.' );
 		}
 		return [ 'success' => true, 'path' => $this->relative_path( $path ), 'backup' => $backup ];
 	}
@@ -982,7 +1040,7 @@ trait WPMCP_Filesystem_Tools {
 			WPMCP_Errors::fail( WPMCP_Errors::IO_FAILED, 'Could not recreate the destination directory.' );
 		}
 		if ( ! copy( $source, $target ) ) {
-			WPMCP_Errors::fail( WPMCP_Errors::IO_FAILED, 'Restore failed — check permissions on ' . $entry['path'] . '.' );
+			WPMCP_Errors::fail( WPMCP_Errors::IO_FAILED, 'Restore failed. Check permissions on ' . $entry['path'] . '.' );
 		}
 
 		return [
@@ -1023,7 +1081,7 @@ trait WPMCP_Filesystem_Tools {
 			WPMCP_Errors::fail( WPMCP_Errors::CONFLICT, sprintf( 'A theme directory "%s" already exists.', $slug ) );
 		}
 		if ( ! wp_mkdir_p( $dir ) ) {
-			WPMCP_Errors::fail( WPMCP_Errors::IO_FAILED, 'Could not create the theme directory — check that wp-content/themes is writable.' );
+			WPMCP_Errors::fail( WPMCP_Errors::IO_FAILED, 'Could not create the theme directory. Check that wp-content/themes is writable.' );
 		}
 
 		$style = sprintf(

@@ -5,7 +5,7 @@
  *
  * The agent on the other end of the wire can only recover from an error it can
  * understand. Every failure therefore carries a stable `code`, a human message,
- * an optional `hint` describing the fix, and optional structured `details` —
+ * an optional `hint` describing the fix, and optional structured `details`,
  * instead of a bare string that has to be parsed out of prose.
  *
  * @package WordPressMCP
@@ -131,6 +131,14 @@ class WPMCP_Errors {
 	 * @var string
 	 */
 	private static $current_tool = '';
+
+	/**
+	 * JSON-RPC id of the request being served, so a fatal-error response can
+	 * still be matched to the call that caused it.
+	 *
+	 * @var mixed
+	 */
+	public static $rpc_id = null;
 
 	/**
 	 * Throw a typed exception. Shorthand used throughout the tool handlers.
@@ -359,7 +367,7 @@ class WPMCP_Errors {
 		echo wp_json_encode(
 			[
 				'jsonrpc' => '2.0',
-				'id'      => null,
+				'id'      => self::$rpc_id,
 				'error'   => [
 					'code'    => -32000,
 					'message' => sprintf(

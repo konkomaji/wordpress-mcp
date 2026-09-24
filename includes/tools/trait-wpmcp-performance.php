@@ -25,7 +25,7 @@ trait WPMCP_Performance_Tools {
 			[
 				'group'       => 'performance',
 				'name'        => 'performance_audit',
-				'description' => 'Full speed audit of the site: server response time, HTML weight, script/stylesheet/image counts, render-blocking scripts, compression and cache headers, caching-plugin detection, autoloaded-option bloat, database junk (revisions, transients, orphaned meta), oversized images, hosting environment (PHP version, object cache, memory), and which optimisation flags are already on. Returns a prioritised, ranked fix list and a score out of 100. Read-only — start here for any "make my site faster" request.',
+				'description' => 'Full speed audit of the site: server response time, HTML weight, script/stylesheet/image counts, render-blocking scripts, compression and cache headers, caching-plugin detection, autoloaded-option bloat, database junk (revisions, transients, orphaned meta), oversized images, hosting environment (PHP version, object cache, memory), and which optimisation flags are already on. Returns a prioritised, ranked fix list and a score out of 100. Read-only. Start here for any "make my site faster" request.',
 				'inputSchema' => [
 					'type'       => 'object',
 					'properties' => [
@@ -37,12 +37,12 @@ trait WPMCP_Performance_Tools {
 			[
 				'group'       => 'performance',
 				'name'        => 'optimize_site',
-				'description' => 'Apply speed fixes in one call — the "make my site fast" action. preset=safe applies only zero/low-risk wins (emoji + embed scripts, clean head, self-pingbacks, heartbeat throttle, expired transients, revision limit); preset=aggressive adds higher-risk ones (jQuery Migrate, Dashicons, WooCommerce cart fragments, revision purge, database cleanup). Or pass an explicit list of actions. DRY RUN BY DEFAULT: shows exactly what it would change, with the risk of each, before touching anything.',
+				'description' => 'Apply speed fixes in one call: the "make my site fast" action. preset=safe applies only zero/low-risk wins (emoji + embed scripts, clean head, self-pingbacks, heartbeat throttle, expired transients, revision limit); preset=aggressive adds higher-risk ones (jQuery Migrate, Dashicons, WooCommerce cart fragments, revision purge, database cleanup). Or pass an explicit list of actions. DRY RUN BY DEFAULT: shows exactly what it would change, with the risk of each, before touching anything.',
 				'inputSchema' => [
 					'type'       => 'object',
 					'properties' => [
 						'preset'         => [ 'type' => 'string', 'description' => 'safe|aggressive. Default safe.' ],
-						'actions'        => [ 'type' => 'array', 'description' => 'Explicit action list, overriding the preset. Any flag name from performance_settings, plus purge_revisions, clean_database, clear_cache.' ],
+						'actions'        => [ 'type' => 'array', 'items' => [ 'type' => 'string' ], 'description' => 'Explicit action list, overriding the preset. Any flag name from performance_settings, plus purge_revisions, clean_database, clear_cache.' ],
 						'revision_limit' => [ 'type' => 'integer', 'description' => 'Revisions to keep per post when the revision limit is applied. Default 5.' ],
 						'dry_run'        => [ 'type' => 'boolean', 'description' => 'Default TRUE. Set false to apply.' ],
 					],
@@ -55,7 +55,7 @@ trait WPMCP_Performance_Tools {
 				'inputSchema' => [
 					'type'       => 'object',
 					'properties' => [
-						'action'   => [ 'type' => 'string', 'description' => 'get|set. Default get.' ],
+						'action'   => [ 'type' => 'string', 'enum' => [ 'get', 'set' ], 'description' => 'get|set. Default get.' ],
 						'settings' => [ 'type' => 'object', 'description' => 'Map of flag name => value for action=set.' ],
 					],
 				],
@@ -63,11 +63,11 @@ trait WPMCP_Performance_Tools {
 			[
 				'group'       => 'performance',
 				'name'        => 'database_cleanup',
-				'description' => 'Remove database junk that slows queries and inflates backups: post revisions, auto-drafts, trashed posts, spam and trashed comments, expired transients, orphaned post/term/comment meta, and optionally OPTIMIZE TABLE across the install. DRY RUN BY DEFAULT — it reports the row counts it would delete first.',
+				'description' => 'Remove database junk that slows queries and inflates backups: post revisions, auto-drafts, trashed posts, spam and trashed comments, expired transients, orphaned post/term/comment meta, and optionally OPTIMIZE TABLE across the install. DRY RUN BY DEFAULT: it reports the row counts it would delete first.',
 				'inputSchema' => [
 					'type'       => 'object',
 					'properties' => [
-						'targets'         => [ 'type' => 'array', 'description' => 'Which to clean: revisions, auto_drafts, trashed_posts, spam_comments, trashed_comments, expired_transients, orphan_postmeta, orphan_termmeta, orphan_commentmeta, optimize_tables. Default: everything except trashed_posts and optimize_tables.' ],
+						'targets'         => [ 'type' => 'array', 'items' => [ 'type' => 'string' ], 'description' => 'Which to clean: revisions, auto_drafts, trashed_posts, spam_comments, trashed_comments, expired_transients, orphan_postmeta, orphan_termmeta, orphan_commentmeta, optimize_tables. Default: everything except trashed_posts and optimize_tables.' ],
 						'keep_revisions'  => [ 'type' => 'integer', 'description' => 'Keep this many recent revisions per post instead of deleting all. Default 0.' ],
 						'dry_run'         => [ 'type' => 'boolean', 'description' => 'Default TRUE.' ],
 					],
@@ -80,7 +80,7 @@ trait WPMCP_Performance_Tools {
 				'inputSchema' => [
 					'type'       => 'object',
 					'properties' => [
-						'targets' => [ 'type' => 'array', 'description' => 'object_cache, transients, rewrite_rules, opcache, plugins. Default: all.' ],
+						'targets' => [ 'type' => 'array', 'items' => [ 'type' => 'string' ], 'description' => 'object_cache, transients, rewrite_rules, opcache, plugins. Default: all.' ],
 					],
 				],
 			],
@@ -113,7 +113,7 @@ trait WPMCP_Performance_Tools {
 			[
 				'group'       => 'performance',
 				'name'        => 'list_autoloaded_options',
-				'description' => 'List the largest autoloaded options — data loaded from the database on every single page view. Bloat here (usually left behind by removed plugins) slows every request on the site.',
+				'description' => 'List the largest autoloaded options (data loaded from the database on every single page view). Bloat here (usually left behind by removed plugins) slows every request on the site.',
 				'inputSchema' => [
 					'type'       => 'object',
 					'properties' => [
@@ -188,13 +188,13 @@ trait WPMCP_Performance_Tools {
 					'critical',
 					'Slow server response',
 					sprintf( 'The page took %ss to respond. Anything over ~0.8s means visitors wait before the browser can start rendering.', $measured['response_seconds'] ),
-					$caches ? 'A caching plugin is installed — check page caching is actually enabled and warmed.' : 'Install a page-cache plugin, or enable caching at the host. Then re-run analyze_page_speed.'
+					$caches ? 'A caching plugin is installed. Check page caching is actually enabled and warmed.' : 'Install a page-cache plugin, or enable caching at the host. Then re-run analyze_page_speed.'
 				);
 			} elseif ( $measured['response_seconds'] > 0.8 ) {
 				$add( 'high', 'Server response could be faster', sprintf( 'Responded in %ss.', $measured['response_seconds'] ), 'Enable full-page caching and a persistent object cache.' );
 			}
 			if ( empty( $measured['compressed'] ) ) {
-				$add( 'high', 'No compression', 'The server returned uncompressed HTML.', 'Enable gzip or brotli at the web server or CDN — typically a 60-80% cut in HTML transfer size.' );
+				$add( 'high', 'No compression', 'The server returned uncompressed HTML.', 'Enable gzip or brotli at the web server or CDN, typically a 60-80% cut in HTML transfer size.' );
 			}
 			if ( $measured['html_kilobytes'] > 150 ) {
 				$add( 'medium', 'Heavy HTML document', sprintf( 'The HTML alone is %sKB.', $measured['html_kilobytes'] ), 'Usually a page builder or an unpaginated archive. Reduce posts per page and trim inline CSS.' );
@@ -232,7 +232,7 @@ trait WPMCP_Performance_Tools {
 			$add( 'medium', 'OPcache unavailable', 'PHP recompiles every file on every request.', 'Enable the OPcache extension in PHP.' );
 		}
 		if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-			$add( 'medium', 'Debug mode on', 'WP_DEBUG is enabled on a live site — it slows execution and can leak notices into output.', 'Set WP_DEBUG to false in wp-config.php.' );
+			$add( 'medium', 'Debug mode on', 'WP_DEBUG is enabled on a live site; it slows execution and can leak notices into output.', 'Set WP_DEBUG to false in wp-config.php.' );
 		}
 		if ( ! get_option( 'permalink_structure' ) ) {
 			$add( 'low', 'Plain permalinks', 'Plain permalinks are bad for SEO and skip some caching layers.', 'Switch to a post-name permalink structure.' );
@@ -244,7 +244,7 @@ trait WPMCP_Performance_Tools {
 				'high',
 				'Autoloaded options bloat',
 				sprintf( '%sKB of options load on every request across %d rows. Under 800KB is healthy.', $autoload['total_kilobytes'], $autoload['autoloaded_options'] ),
-				'Review the largest entries with list_autoloaded_options — leftovers from removed plugins are the usual cause.'
+				'Review the largest entries with list_autoloaded_options; leftovers from removed plugins are the usual cause.'
 			);
 		}
 		if ( $bloat['revisions'] > 1000 ) {
@@ -439,11 +439,15 @@ trait WPMCP_Performance_Tools {
 
 		if ( ! $dry ) {
 			if ( $to_write ) {
+				WPMCP_Journal::option( WPMCP_Performance::OPTION );
 				WPMCP_Performance::save( $to_write );
 				$done['flags_enabled'] = array_keys( $to_write );
 			}
 			if ( in_array( 'expired_transients', $actions, true ) ) {
 				$done['expired_transients_deleted'] = $this->delete_expired_transients();
+			}
+			if ( array_intersect( [ 'expired_transients', 'purge_revisions', 'clean_database' ], $actions ) ) {
+				WPMCP_Journal::note( 'Revisions, transients and database rows removed by optimize_site are not restored by undo. Only the speed flags are.' );
 			}
 			if ( in_array( 'purge_revisions', $actions, true ) ) {
 				$done['revisions_deleted'] = $this->purge_revisions( $revision_limit );
@@ -468,7 +472,7 @@ trait WPMCP_Performance_Tools {
 			'before'     => $before,
 			'after'      => $dry ? null : WPMCP_Performance::database_bloat(),
 			'note'       => $dry
-				? 'Dry run — nothing was changed. Review the planned list, then call again with dry_run=false.'
+				? 'Dry run: nothing was changed. Review the planned list, then call again with dry_run=false.'
 				: 'Applied. Purge any page cache (clear_cache) and re-run analyze_page_speed to measure the difference.',
 			'reminder'   => 'Front-end flags are reversible at any time with performance_settings.',
 		];
@@ -490,6 +494,7 @@ trait WPMCP_Performance_Tools {
 				);
 			}
 			$unknown = array_diff( array_keys( $args['settings'] ), array_keys( WPMCP_Performance::flags() ) );
+			WPMCP_Journal::option( WPMCP_Performance::OPTION );
 			$saved   = WPMCP_Performance::save( $args['settings'] );
 			return [
 				'success'  => true,
@@ -555,10 +560,11 @@ trait WPMCP_Performance_Tools {
 				'targets' => $targets,
 				'would_delete' => $preview,
 				'current_counts' => $counts,
-				'note'    => 'Dry run — nothing was deleted. Call again with dry_run=false to clean.',
+				'note'    => 'Dry run: nothing was deleted. Call again with dry_run=false to clean.',
 			];
 		}
 
+		WPMCP_Journal::note( 'Rows removed by database_cleanup are not restored by undo.' );
 		$result = $this->run_database_cleanup( $targets, $keep );
 		return [
 			'dry_run' => false,
@@ -871,13 +877,13 @@ trait WPMCP_Performance_Tools {
 			$recommendations[] = sprintf( '%d image(s) exceed %dKB. Re-export them at web resolution, or install an image-optimisation plugin to compress the library in bulk.', count( $oversized ), $max_kb );
 		}
 		if ( $too_wide ) {
-			$recommendations[] = sprintf( '%d image(s) are wider than %dpx — far larger than any layout displays. Resize the originals.', count( $too_wide ), $max_width );
+			$recommendations[] = sprintf( '%d image(s) are wider than %dpx, far larger than any layout displays. Resize the originals.', count( $too_wide ), $max_width );
 		}
 		if ( $not_modern ) {
 			$recommendations[] = sprintf( '%d image(s) are not WebP/AVIF. Converting could save roughly %sMB in transfer.', $not_modern, round( $waste_bytes / 1048576, 1 ) );
 		}
 		if ( $no_alt ) {
-			$recommendations[] = sprintf( '%d image(s) have no alt text — an accessibility and SEO gap. Fix with set_image_alt, or find them via list_media with missing_alt=true.', $no_alt );
+			$recommendations[] = sprintf( '%d image(s) have no alt text, an accessibility and SEO gap. Fix with set_image_alt, or find them via list_media with missing_alt=true.', $no_alt );
 		}
 
 		return [
@@ -915,7 +921,7 @@ trait WPMCP_Performance_Tools {
 				$psi = WPMCP_SiteKit::pagespeed( $url, $args['strategy'] ?? 'mobile' );
 				$result['pagespeed_insights'] = $this->summarise_pagespeed( $psi );
 			} catch ( Throwable $e ) {
-				// A missing Google connection must not fail the whole tool —
+				// A missing Google connection must not fail the whole tool;
 				// the server-side measurement above is still useful.
 				$result['pagespeed_insights'] = [
 					'available' => false,
@@ -932,7 +938,7 @@ trait WPMCP_Performance_Tools {
 		$notes = [];
 		if ( empty( $measured['error'] ) ) {
 			if ( $measured['response_seconds'] > 0.8 ) {
-				$notes[] = sprintf( 'Server response %ss — aim under 0.8s.', $measured['response_seconds'] );
+				$notes[] = sprintf( 'Server response %ss; aim under 0.8s.', $measured['response_seconds'] );
 			}
 			if ( empty( $measured['compressed'] ) ) {
 				$notes[] = 'Response is not compressed.';
@@ -1015,7 +1021,7 @@ trait WPMCP_Performance_Tools {
 	private function tool_list_autoloaded_options( $args ) {
 		$stats = WPMCP_Performance::autoload_stats( min( (int) ( $args['limit'] ?? 20 ) ?: 20, 100 ) );
 		if ( $stats['is_bloated'] ) {
-			$stats['recommendation'] = 'Autoload data is above the healthy 800KB mark. Large entries named after plugins you no longer run can usually be deleted — check each with get_option before removing it via the database group.';
+			$stats['recommendation'] = 'Autoload data is above the healthy 800KB mark. Large entries named after plugins you no longer run can usually be deleted. Check each with get_option before removing it via the database group.';
 		} else {
 			$stats['recommendation'] = 'Autoload size is within a healthy range.';
 		}

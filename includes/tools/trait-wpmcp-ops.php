@@ -28,11 +28,11 @@ trait WPMCP_Ops_Tools {
 			[
 				'group'       => 'content',
 				'name'        => 'batch',
-				'description' => 'Run up to 50 tool calls in a single request. Each step reports its own result or its own error, so one failure does not lose the rest, and the whole batch is recorded as ONE undoable operation. Use this instead of many round trips whenever the same edit applies to a list of posts or products — it is the difference between 200 requests and one. Cannot contain another batch.',
+				'description' => 'Run up to 50 tool calls in a single request. Each step reports its own result or its own error, so one failure does not lose the rest, and the whole batch is recorded as ONE undoable operation. Use this instead of many round trips whenever the same edit applies to a list of posts or products: it is the difference between 200 requests and one. Cannot contain another batch.',
 				'inputSchema' => [
 					'type'       => 'object',
 					'properties' => [
-						'operations'    => [ 'type' => 'array', 'description' => 'Steps to run in order. Each is { "tool": "update_product", "args": { … }, "id": "optional label" }.' ],
+						'operations'    => [ 'type' => 'array', 'items' => [ 'type' => 'object', 'properties' => [ 'tool' => [ 'type' => 'string', 'description' => 'Tool name.' ], 'args' => [ 'type' => 'object', 'description' => 'Arguments for that tool.' ], 'id' => [ 'type' => 'string', 'description' => 'Optional label echoed back in the result.' ] ], 'required' => [ 'tool' ] ], 'description' => 'Steps to run in order. Each is { "tool": "update_product", "args": { … }, "id": "optional label" }.' ],
 						'stop_on_error' => [ 'type' => 'boolean', 'description' => 'Abandon the remaining steps after the first failure. Default false.' ],
 					],
 					'required'   => [ 'operations' ],
@@ -74,7 +74,7 @@ trait WPMCP_Ops_Tools {
 					'properties' => [
 						'label'           => [ 'type' => 'string', 'description' => 'What this restore point is for.' ],
 						'post_type'       => [ 'type' => 'string', 'description' => 'Post type to snapshot. Default post.' ],
-						'ids'             => [ 'type' => 'array', 'description' => 'Specific post IDs instead of a whole type.' ],
+						'ids'             => [ 'type' => 'array', 'items' => [ 'type' => 'integer' ], 'description' => 'Specific post IDs instead of a whole type.' ],
 						'include_content' => [ 'type' => 'boolean', 'description' => 'Also snapshot title, content and excerpt. Heavier, but survives a bad rewrite. Default false.' ],
 						'include_options' => [ 'type' => 'boolean', 'description' => 'Also snapshot the plugin-managed options (redirects, robots rules, llms.txt, performance flags). Default true.' ],
 						'limit'           => [ 'type' => 'integer', 'description' => 'Maximum posts. Default 200, max 1000.' ],
@@ -84,7 +84,7 @@ trait WPMCP_Ops_Tools {
 			[
 				'group'       => 'diagnostics',
 				'name'        => 'get_progress',
-				'description' => 'Read how far a long-running tool has got. Call it on a second connection while an audit or a bulk run is still working — it reports the tool, items done out of the total, elapsed time and what it is on now. Returns nothing when the site is idle.',
+				'description' => 'Read how far a long-running tool has got. Call it on a second connection while an audit or a bulk run is still working. It reports the tool, items done out of the total, elapsed time and what it is on now. Returns nothing when the site is idle.',
 				'inputSchema' => [
 					'type'       => 'object',
 					'properties' => new stdClass(),
@@ -102,6 +102,19 @@ trait WPMCP_Ops_Tools {
 						'writes_only' => [ 'type' => 'boolean', 'description' => 'Only calls that could have changed something. Default false.' ],
 						'errors_only' => [ 'type' => 'boolean', 'description' => 'Only failed calls. Default false.' ],
 						'since'       => [ 'type' => 'string', 'description' => 'Only calls after this time, e.g. "2026-08-24" or "-2 hours".' ],
+					],
+				],
+			],
+			[
+				'group'       => 'content',
+				'name'        => 'list_change_requests',
+				'description' => 'Status of changes waiting for a person to approve them. On a connection that needs approval, every write is queued as a change request instead of running; use this to see whether yours were approved (with the operation_id that applied them), rejected (with the reviewer\'s note) or are still pending. A connection sees its own requests; the owner key sees all.',
+				'inputSchema' => [
+					'type'       => 'object',
+					'properties' => [
+						'id'     => [ 'type' => 'string', 'description' => 'One request id, from the queued_for_approval result.' ],
+						'status' => [ 'type' => 'string', 'enum' => [ 'pending', 'approved', 'rejected', 'failed' ], 'description' => 'Only requests with this status.' ],
+						'limit'  => [ 'type' => 'integer', 'description' => 'How many. Default 20, max 100.' ],
 					],
 				],
 			],
@@ -125,7 +138,7 @@ trait WPMCP_Ops_Tools {
 			WPMCP_Errors::fail(
 				WPMCP_Errors::INVALID_ARGUMENT,
 				sprintf( 'A batch takes at most 50 steps; %d were sent.', count( $operations ) ),
-				'Split the work into several batches — each one still counts as a single undoable operation.',
+				'Split the work into several batches; each one still counts as a single undoable operation.',
 				[ 'sent' => count( $operations ) ]
 			);
 		}
@@ -207,7 +220,7 @@ trait WPMCP_Ops_Tools {
 				: 'Ran out of execution time. Send the remaining steps as a second batch.';
 		} else {
 			$out['next_step'] = $failed
-				? 'Some steps failed — each carries its own code and hint. The successful ones are already saved.'
+				? 'Some steps failed. Each carries its own code and hint. The successful ones are already saved.'
 				: 'All steps completed. The whole batch reverses with a single undo_operation call.';
 		}
 
@@ -218,10 +231,31 @@ trait WPMCP_Ops_Tools {
 	 * @param array $args Args.
 	 * @return array
 	 */
+	/**
+	 * Whether the current connection may see and undo an operation. The owner
+	 * key (and WP-CLI or wp-admin, where no key is set) sees everything; any
+	 * other key sees only what it did itself, so one client's connection
+	 * cannot read another's old values or reverse its work.
+	 *
+	 * @param array $row Index row or stored operation.
+	 * @return bool
+	 */
+	private function operation_visible( $row ) {
+		$key = WPMCP_Keys::current();
+		if ( ! $key || WPMCP_Keys::OWNER === $key['id'] ) {
+			return true;
+		}
+		return ( $row['key_id'] ?? '' ) === $key['id'];
+	}
+
+	/**
+	 * @param array $args Args.
+	 * @return array
+	 */
 	private function tool_list_operations( $args ) {
 		if ( ! empty( $args['id'] ) ) {
 			$operation = WPMCP_Journal::get( (string) $args['id'] );
-			if ( ! $operation ) {
+			if ( ! $operation || ! $this->operation_visible( $operation ) ) {
 				WPMCP_Errors::fail(
 					WPMCP_Errors::NOT_FOUND,
 					sprintf( 'No operation "%s" is stored.', (string) $args['id'] ),
@@ -237,6 +271,9 @@ trait WPMCP_Ops_Tools {
 		$rows    = [];
 
 		foreach ( WPMCP_Journal::index() as $row ) {
+			if ( ! $this->operation_visible( $row ) ) {
+				continue;
+			}
 			if ( '' !== $tool && ( $row['tool'] ?? '' ) !== $tool ) {
 				continue;
 			}
@@ -268,15 +305,39 @@ trait WPMCP_Ops_Tools {
 		// the change straight back.
 		WPMCP_Journal::discard();
 
+		$operation = WPMCP_Journal::get( (string) $args['id'] );
+		if ( $operation && ! $this->operation_visible( $operation ) ) {
+			WPMCP_Errors::fail(
+				WPMCP_Errors::NOT_FOUND,
+				sprintf( 'No operation "%s" is stored for this connection.', (string) $args['id'] ),
+				'A connection can undo only the changes it made itself. Call list_operations to see them.'
+			);
+		}
+
 		$result = WPMCP_Journal::undo( (string) $args['id'], WPMCP_Util::bool( $args['force'] ?? null ) );
+
+		// Only claim a full restore when nothing was left behind: a failed
+		// record, a recording that overflowed, or a change the tool noted as
+		// having no revert record all mean part of the site is still changed.
+		$messages = [];
+		if ( $result['failed'] ) {
+			$messages[] = 'Some records could not be restored, usually because the post or product has since been deleted. The rest are back.';
+		}
+		if ( ! empty( $result['truncated'] ) ) {
+			$messages[] = 'The operation was too large to record in full, so only the recorded part was put back.';
+		}
+		if ( ! empty( $result['not_restored'] ) ) {
+			$messages[] = 'Some changes had no undo record and are still in place. See not_restored for what to fix by hand.';
+		}
+		if ( ! $messages ) {
+			$messages[] = 'Everything this operation changed has been put back.';
+		}
 
 		return array_merge(
 			$result,
 			[
 				'success'   => empty( $result['failed'] ),
-				'next_step' => $result['failed']
-					? 'Some records could not be restored — usually because the post or product has since been deleted. The rest are back.'
-					: 'Everything this operation changed has been put back.',
+				'next_step' => implode( ' ', $messages ),
 			]
 		);
 	}
@@ -341,7 +402,7 @@ trait WPMCP_Ops_Tools {
 			}
 		}
 
-		WPMCP_Journal::note( 'Restore point: ' . (string) ( $args['label'] ?? 'unlabelled' ) );
+		WPMCP_Journal::label( 'Restore point: ' . (string) ( $args['label'] ?? 'unlabelled' ) );
 
 		return [
 			'label'         => (string) ( $args['label'] ?? '' ),
@@ -350,7 +411,7 @@ trait WPMCP_Ops_Tools {
 			'includes'      => array_values( array_filter( [ 'seo', 'schema', $content ? 'content' : '', $options ? 'options' : '' ] ) ),
 			'stopped_early' => $stopped,
 			'next_step'     => $stopped
-				? 'The execution limit was reached before every post was captured. The restore point covers what was snapshotted — narrow it with ids or a smaller limit for full cover.'
+				? 'The execution limit was reached before every post was captured. The restore point covers what was snapshotted. Narrow it with ids or a smaller limit for full cover.'
 				: 'Keep the operation_id below. undo_operation with it puts this whole set back exactly as it is now.',
 		];
 	}
@@ -421,6 +482,29 @@ trait WPMCP_Ops_Tools {
 			'scanned'   => $scanned,
 			'kept'      => WPMCP_Audit::LIMIT,
 			'next_step' => 'Entries carrying an operation_id can be reversed with undo_operation.',
+		];
+	}
+	/**
+	 * @param array $args Args.
+	 * @return array
+	 */
+	private function tool_list_change_requests( $args ) {
+		$key  = WPMCP_Keys::current();
+		$mine = function ( $request ) use ( $key ) {
+			return ! $key || WPMCP_Keys::OWNER === $key['id'] || $request['key_id'] === $key['id'];
+		};
+		if ( ! empty( $args['id'] ) ) {
+			$request = WPMCP_Approvals::get( (string) $args['id'] );
+			if ( ! $request || ! $mine( $request ) ) {
+				WPMCP_Errors::fail( WPMCP_Errors::NOT_FOUND, sprintf( 'Change request %s was not found.', (string) $args['id'] ), 'Call list_change_requests without an id to see your requests.' );
+			}
+			return WPMCP_Approvals::for_agent( $request );
+		}
+		$limit = min( max( 1, (int) ( $args['limit'] ?? 20 ) ), 100 );
+		$list  = array_values( array_filter( WPMCP_Approvals::with_status( (string) ( $args['status'] ?? '' ) ), $mine ) );
+		return [
+			'count'    => count( $list ),
+			'requests' => array_map( [ 'WPMCP_Approvals', 'for_agent' ], array_slice( $list, 0, $limit ) ),
 		];
 	}
 }

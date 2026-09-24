@@ -35,6 +35,8 @@ class WPMCP_Frontend {
 		add_action( 'template_redirect', [ $this, 'maybe_serve_indexnow_key' ] );
 		// SEO/GEO: extra robots.txt directives (e.g. AI-crawler rules).
 		add_filter( 'robots_txt', [ $this, 'filter_robots_txt' ], 20 );
+		// do_robots() sends its own text/plain header; add nosniff alongside it.
+		add_action( 'do_robotstxt', [ $this, 'send_nosniff' ] );
 		// SEO: managed 301 redirects, evaluated before the main query renders.
 		add_action( 'template_redirect', [ $this, 'maybe_redirect' ], 1 );
 	}
@@ -171,6 +173,7 @@ class WPMCP_Frontend {
 			return;
 		}
 		header( 'Content-Type: text/plain; charset=utf-8' );
+		$this->send_nosniff();
 		status_header( 200 );
 		echo esc_html( $key );
 		exit;
@@ -184,15 +187,28 @@ class WPMCP_Frontend {
 			return;
 		}
 		$content = get_option( self::LLMS_OPTION, '' );
+		header( 'Content-Type: text/plain; charset=utf-8' );
+		$this->send_nosniff();
 		if ( '' === $content ) {
 			status_header( 404 );
 			echo '# No llms.txt configured';
 			exit;
 		}
-		header( 'Content-Type: text/plain; charset=utf-8' );
 		status_header( 200 );
 		echo $content; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- plain text body.
 		exit;
+	}
+
+	/**
+	 * Tell browsers not to sniff these plain text files as HTML. llms.txt and
+	 * robots.txt carry text written through the API, and without this header
+	 * a browser that guessed "HTML" would run any markup in it on the site's
+	 * own origin.
+	 */
+	public function send_nosniff() {
+		if ( ! headers_sent() ) {
+			header( 'X-Content-Type-Options: nosniff' );
+		}
 	}
 
 	/**

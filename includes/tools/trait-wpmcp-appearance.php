@@ -51,7 +51,7 @@ trait WPMCP_Appearance_Tools {
 					'properties' => [
 						'menu'      => [ 'type' => 'string', 'description' => 'Existing menu name/slug/ID to update. Omit to create.' ],
 						'name'      => [ 'type' => 'string', 'description' => 'Name for the new or renamed menu.' ],
-						'locations' => [ 'type' => 'array', 'description' => 'Theme location slugs to assign this menu to (see list_menus).' ],
+						'locations' => [ 'type' => 'array', 'items' => [ 'type' => 'string' ], 'description' => 'Theme location slugs to assign this menu to (see list_menus).' ],
 					],
 				],
 			],
@@ -74,8 +74,8 @@ trait WPMCP_Appearance_Tools {
 					'properties' => [
 						'menu'    => [ 'type' => 'string', 'description' => 'Menu name, slug, or ID.' ],
 						'action'  => [ 'type' => 'string', 'description' => 'add|update|delete|reorder. Default add.' ],
-						'items'   => [ 'type' => 'array', 'description' => 'For add/update: [{item_id?, title, object_id?, object_type?, url?, parent_id?, position?, target?, classes?, description?}]. object_type is post_type|taxonomy|custom.' ],
-						'item_ids'=> [ 'type' => 'array', 'description' => 'For delete: menu item IDs. For reorder: IDs in the desired order.' ],
+						'items'   => [ 'type' => 'array', 'items' => [ 'type' => 'object', 'properties' => [ 'item_id' => [ 'type' => 'integer' ], 'title' => [ 'type' => 'string' ], 'object_id' => [ 'type' => 'integer' ], 'object_type' => [ 'type' => 'string' ], 'object' => [ 'type' => 'string' ], 'url' => [ 'type' => 'string' ], 'parent_id' => [ 'type' => 'integer' ], 'position' => [ 'type' => 'integer' ], 'target' => [ 'type' => 'string' ], 'classes' => [ 'type' => 'string' ], 'description' => [ 'type' => 'string' ] ] ], 'description' => 'For add/update: [{item_id?, title, object_id?, object_type?, url?, parent_id?, position?, target?, classes?, description?}]. object_type is post_type|taxonomy|custom.' ],
+						'item_ids'=> [ 'type' => 'array', 'items' => [ 'type' => 'integer' ], 'description' => 'For delete: menu item IDs. For reorder: IDs in the desired order.' ],
 					],
 					'required'   => [ 'menu' ],
 				],
@@ -105,11 +105,11 @@ trait WPMCP_Appearance_Tools {
 			[
 				'group'       => 'appearance',
 				'name'        => 'theme_customizer',
-				'description' => 'Read or write the active theme\'s customizer settings (theme mods) — colours, layout options, custom logo, and anything else the theme stores there. action=get lists current values; action=set writes them.',
+				'description' => 'Read or write the active theme\'s customizer settings (theme mods): colours, layout options, custom logo, and anything else the theme stores there. action=get lists current values; action=set writes them.',
 				'inputSchema' => [
 					'type'       => 'object',
 					'properties' => [
-						'action' => [ 'type' => 'string', 'description' => 'get|set. Default get.' ],
+						'action' => [ 'type' => 'string', 'enum' => [ 'get', 'set' ], 'description' => 'get|set. Default get.' ],
 						'mods'   => [ 'type' => 'object', 'description' => 'Map of theme mod name => value for action=set.' ],
 					],
 				],
@@ -121,7 +121,7 @@ trait WPMCP_Appearance_Tools {
 				'inputSchema' => [
 					'type'       => 'object',
 					'properties' => [
-						'action'          => [ 'type' => 'string', 'description' => 'get|set. Default get.' ],
+						'action'          => [ 'type' => 'string', 'enum' => [ 'get', 'set' ], 'description' => 'get|set. Default get.' ],
 						'title'           => [ 'type' => 'string' ],
 						'tagline'         => [ 'type' => 'string' ],
 						'site_icon_id'    => [ 'type' => 'integer', 'description' => 'Attachment ID for the favicon.' ],
@@ -157,7 +157,7 @@ trait WPMCP_Appearance_Tools {
 			WPMCP_Errors::fail(
 				WPMCP_Errors::NOT_FOUND,
 				sprintf( 'No menu matched "%s".', $identifier ),
-				$names ? 'Existing menus: ' . implode( ', ', $names ) . '.' : 'This site has no menus yet — create one with save_menu.',
+				$names ? 'Existing menus: ' . implode( ', ', $names ) . '.' : 'This site has no menus yet. Create one with save_menu.',
 				[ 'available' => $names ]
 			);
 		}
@@ -240,6 +240,7 @@ trait WPMCP_Appearance_Tools {
 			$menu    = $this->resolve_menu( $args['menu'] );
 			$menu_id = $menu->term_id;
 			if ( ! empty( $args['name'] ) && $args['name'] !== $menu->name ) {
+				WPMCP_Journal::note( sprintf( 'Renaming menu %d is not reversed by undo.', $menu_id ) );
 				$result = wp_update_nav_menu_object( $menu_id, [ 'menu-name' => (string) $args['name'] ] );
 				if ( is_wp_error( $result ) ) {
 					WPMCP_Errors::from_wp_error( $result );
@@ -253,6 +254,7 @@ trait WPMCP_Appearance_Tools {
 			if ( is_wp_error( $menu_id ) ) {
 				WPMCP_Errors::from_wp_error( $menu_id, WPMCP_Errors::CONFLICT, 'A menu with that name may already exist.' );
 			}
+			WPMCP_Journal::note( sprintf( 'Menu %d created by save_menu is not deleted by undo. Use delete_menu.', (int) $menu_id ) );
 		}
 
 		$assigned = [];
@@ -270,6 +272,8 @@ trait WPMCP_Appearance_Tools {
 				$locations[ $location ] = (int) $menu_id;
 				$assigned[]             = $location;
 			}
+			// Menu locations live in the theme mods option, which has a record type.
+			WPMCP_Journal::option( 'theme_mods_' . get_option( 'stylesheet' ) );
 			set_theme_mod( 'nav_menu_locations', $locations );
 		}
 
@@ -286,6 +290,7 @@ trait WPMCP_Appearance_Tools {
 	 */
 	private function tool_delete_menu( $args ) {
 		$menu = $this->resolve_menu( $args['menu'] );
+		WPMCP_Journal::note( sprintf( 'Menu %d deleted by delete_menu is not restored by undo.', $menu->term_id ) );
 		if ( ! wp_delete_nav_menu( $menu->term_id ) ) {
 			WPMCP_Errors::fail( WPMCP_Errors::TOOL_FAILED, 'The menu could not be deleted.' );
 		}
@@ -299,6 +304,7 @@ trait WPMCP_Appearance_Tools {
 	private function tool_manage_menu_items( $args ) {
 		$menu   = $this->resolve_menu( $args['menu'] );
 		$action = $args['action'] ?? 'add';
+		WPMCP_Journal::note( sprintf( 'Menu item changes (%s) in menu %d are not restored by undo.', $action, $menu->term_id ) );
 
 		if ( 'delete' === $action ) {
 			$deleted = [];
@@ -519,6 +525,8 @@ trait WPMCP_Appearance_Tools {
 			}
 			$instances = get_option( 'widget_' . $parts['base'], [] );
 			unset( $instances[ $parts['number'] ] );
+			WPMCP_Journal::option( 'widget_' . $parts['base'] );
+			WPMCP_Journal::option( 'sidebars_widgets' );
 			update_option( 'widget_' . $parts['base'], $instances );
 			wp_set_sidebars_widgets( $sidebars_widgets );
 			return [ 'success' => true, 'deleted' => $widget_id ];
@@ -540,6 +548,7 @@ trait WPMCP_Appearance_Tools {
 			$sidebars_widgets[ $target ] = $sidebars_widgets[ $target ] ?? [];
 			$position                    = isset( $args['position'] ) ? (int) $args['position'] : count( $sidebars_widgets[ $target ] );
 			array_splice( $sidebars_widgets[ $target ], $position, 0, [ $widget_id ] );
+			WPMCP_Journal::option( 'sidebars_widgets' );
 			wp_set_sidebars_widgets( $sidebars_widgets );
 			return [ 'success' => true, 'widget_id' => $widget_id, 'sidebar' => $target ];
 		}
@@ -555,6 +564,7 @@ trait WPMCP_Appearance_Tools {
 				(array) $instances[ $parts['number'] ],
 				(array) ( $args['settings'] ?? [] )
 			);
+			WPMCP_Journal::option( 'widget_' . $parts['base'] );
 			update_option( 'widget_' . $parts['base'], $instances );
 			return [ 'success' => true, 'widget_id' => $widget_id, 'settings' => $instances[ $parts['number'] ] ];
 		}
@@ -578,6 +588,8 @@ trait WPMCP_Appearance_Tools {
 
 		$instances[ $number ]   = (array) ( $args['settings'] ?? [] );
 		$instances['_multiwidget'] = 1;
+		WPMCP_Journal::option( 'widget_' . $base );
+		WPMCP_Journal::option( 'sidebars_widgets' );
 		update_option( 'widget_' . $base, $instances );
 
 		$widget_id                    = $base . '-' . $number;
@@ -606,6 +618,9 @@ trait WPMCP_Appearance_Tools {
 				WPMCP_Errors::fail( WPMCP_Errors::MISSING_ARGUMENT, 'mods is required for action=set.' );
 			}
 			$written = [];
+			// Every theme mod lives in one option per theme, so one snapshot
+			// covers all of them.
+			WPMCP_Journal::option( 'theme_mods_' . get_option( 'stylesheet' ) );
 			foreach ( $args['mods'] as $key => $value ) {
 				// nav_menu_locations has its own tool and a specific shape.
 				if ( 'nav_menu_locations' === $key ) {
@@ -668,10 +683,12 @@ trait WPMCP_Appearance_Tools {
 				if ( in_array( $option, [ 'site_icon', 'page_on_front', 'page_for_posts', 'posts_per_page' ], true ) ) {
 					$value = (int) $value;
 				}
+				WPMCP_Journal::option( $option );
 				update_option( $option, $value );
 				$written[ $option ] = $value;
 			}
 			if ( isset( $args['custom_logo_id'] ) ) {
+				WPMCP_Journal::option( 'theme_mods_' . get_option( 'stylesheet' ) );
 				set_theme_mod( 'custom_logo', (int) $args['custom_logo_id'] );
 				$written['custom_logo'] = (int) $args['custom_logo_id'];
 			}

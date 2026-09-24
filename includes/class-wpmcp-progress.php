@@ -2,10 +2,12 @@
 /**
  * Progress reporting and the time budget for long-running tools.
  *
- * A single HTTP JSON-RPC call cannot stream, so a tool that walks three
- * thousand products is silent until it finishes — or until PHP kills it and
- * the client gets nothing at all. Two mechanisms fix that:
+ * A tool that walks three thousand products would otherwise be silent until
+ * it finishes, or until PHP kills it and the client gets nothing at all.
+ * Three mechanisms fix that:
  *
+ *   - Live progress notifications, streamed to clients that asked for them
+ *     (a progressToken on the call); see listen().
  *   - A heartbeat in a transient, readable through get_progress on a second
  *     connection while the first is still working.
  *   - A time budget: long loops ask should_stop() and return early with a
@@ -65,6 +67,56 @@ class WPMCP_Progress {
 	private static $last_write = 0.0;
 
 	/**
+	 * Receives progress updates while a streamed call runs.
+	 *
+	 * @var callable|null
+	 */
+	private static $listener = null;
+
+	/**
+	 * Progress value last sent to the listener; each one sent must be larger.
+	 *
+	 * @var int
+	 */
+	private static $last_sent = -1;
+
+	/**
+	 * When the listener was last called, to pace updates.
+	 *
+	 * @var float
+	 */
+	private static $last_notify = 0.0;
+
+	/**
+	 * Register (or clear, with null) a callback for live progress. It receives
+	 * { done, total, note } at most about once a second.
+	 *
+	 * @param callable|null $listener Callback.
+	 */
+	public static function listen( $listener ) {
+		self::$listener    = $listener;
+		self::$last_sent   = -1;
+		self::$last_notify = 0.0;
+	}
+
+	/**
+	 * Tell the listener, if there is one and the value has moved on.
+	 *
+	 * @param bool $force Ignore the pacing interval.
+	 */
+	private static function notify( $force = false ) {
+		if ( ! self::$listener || null === self::$state || self::$state['done'] <= self::$last_sent ) {
+			return;
+		}
+		if ( ! $force && microtime( true ) - self::$last_notify < 1.0 ) {
+			return;
+		}
+		self::$last_sent   = self::$state['done'];
+		self::$last_notify = microtime( true );
+		call_user_func( self::$listener, self::$state );
+	}
+
+	/**
 	 * Mark the start of a request's work. Called once per dispatch.
 	 *
 	 * @param string $tool Tool name.
@@ -92,6 +144,7 @@ class WPMCP_Progress {
 			'started' => gmdate( 'c' ),
 		];
 		self::write();
+		self::notify( true );
 	}
 
 	/**
@@ -112,12 +165,18 @@ class WPMCP_Progress {
 		if ( microtime( true ) - self::$last_write >= 2.0 ) {
 			self::write();
 		}
+		self::notify();
 	}
 
 	/**
 	 * Clear the heartbeat.
 	 */
 	public static function finish() {
+		// Only the request that started a run clears its heartbeat. Every
+		// other call (a get_progress poll included) must leave it alone.
+		if ( null === self::$state ) {
+			return;
+		}
 		self::$state = null;
 		delete_transient( self::TRANSIENT );
 	}

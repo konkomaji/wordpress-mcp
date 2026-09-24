@@ -54,6 +54,59 @@ class WPMCP_SEO {
 	}
 
 	/**
+	 * The active engine's raw post meta keys, i.e. everything set_post_seo()
+	 * can write. The journal snapshots these so an undo restores exactly what
+	 * the SEO plugin had stored, including keys that did not exist yet.
+	 *
+	 * @return string[]
+	 */
+	public static function post_meta_keys() {
+		if ( 'rankmath' === self::provider() ) {
+			return [
+				'rank_math_title',
+				'rank_math_description',
+				'rank_math_focus_keyword',
+				'rank_math_canonical_url',
+				'rank_math_robots',
+				'rank_math_facebook_title',
+				'rank_math_facebook_description',
+				'rank_math_twitter_title',
+				'rank_math_twitter_description',
+				'rank_math_facebook_image',
+				'rank_math_facebook_image_id',
+				'rank_math_twitter_image',
+				'rank_math_twitter_image_id',
+			];
+		}
+		return [
+			'_yoast_wpseo_title',
+			'_yoast_wpseo_metadesc',
+			'_yoast_wpseo_focuskw',
+			'_yoast_wpseo_canonical',
+			'_yoast_wpseo_meta-robots-noindex',
+			'_yoast_wpseo_meta-robots-nofollow',
+			'_yoast_wpseo_opengraph-title',
+			'_yoast_wpseo_opengraph-description',
+			'_yoast_wpseo_twitter-title',
+			'_yoast_wpseo_twitter-description',
+			'_yoast_wpseo_opengraph-image',
+			'_yoast_wpseo_opengraph-image-id',
+			'_yoast_wpseo_twitter-image',
+			'_yoast_wpseo_twitter-image-id',
+		];
+	}
+
+	/**
+	 * Rank Math's term meta keys written by set_term_seo(). Yoast keeps term
+	 * SEO in the wpseo_taxonomy_meta option instead.
+	 *
+	 * @return string[]
+	 */
+	public static function term_meta_keys() {
+		return [ 'rank_math_title', 'rank_math_description', 'rank_math_focus_keyword' ];
+	}
+
+	/**
 	 * Read normalised SEO fields for a post.
 	 *
 	 * @param int $post_id Post ID.
@@ -131,7 +184,7 @@ class WPMCP_SEO {
 			];
 			foreach ( $map as $field => $meta_key ) {
 				if ( array_key_exists( $field, $fields ) ) {
-					update_post_meta( $post_id, $meta_key, sanitize_text_field( $fields[ $field ] ) );
+					update_post_meta( $post_id, $meta_key, wp_slash( sanitize_text_field( $fields[ $field ] ) ) );
 				}
 			}
 			self::write_image_field( $post_id, $fields, 'og_image', 'rank_math_facebook_image', 'rank_math_facebook_image_id' );
@@ -144,7 +197,7 @@ class WPMCP_SEO {
 				if ( ! in_array( 'noindex', $robots, true ) && ! in_array( 'index', $robots, true ) ) {
 					$robots[] = 'index';
 				}
-				update_post_meta( $post_id, 'rank_math_robots', array_values( array_unique( $robots ) ) );
+				update_post_meta( $post_id, 'rank_math_robots', wp_slash( array_values( array_unique( $robots ) ) ) );
 			}
 		} else {
 			$map = [
@@ -159,7 +212,7 @@ class WPMCP_SEO {
 			];
 			foreach ( $map as $field => $meta_key ) {
 				if ( array_key_exists( $field, $fields ) ) {
-					update_post_meta( $post_id, $meta_key, sanitize_text_field( $fields[ $field ] ) );
+					update_post_meta( $post_id, $meta_key, wp_slash( sanitize_text_field( $fields[ $field ] ) ) );
 				}
 			}
 			self::write_image_field( $post_id, $fields, 'og_image', '_yoast_wpseo_opengraph-image', '_yoast_wpseo_opengraph-image-id' );
@@ -220,13 +273,13 @@ class WPMCP_SEO {
 
 		if ( 'rankmath' === $provider ) {
 			if ( array_key_exists( 'title', $fields ) ) {
-				update_term_meta( $term_id, 'rank_math_title', sanitize_text_field( $fields['title'] ) );
+				update_term_meta( $term_id, 'rank_math_title', wp_slash( sanitize_text_field( $fields['title'] ) ) );
 			}
 			if ( array_key_exists( 'description', $fields ) ) {
-				update_term_meta( $term_id, 'rank_math_description', sanitize_text_field( $fields['description'] ) );
+				update_term_meta( $term_id, 'rank_math_description', wp_slash( sanitize_text_field( $fields['description'] ) ) );
 			}
 			if ( array_key_exists( 'focus_keyword', $fields ) ) {
-				update_term_meta( $term_id, 'rank_math_focus_keyword', sanitize_text_field( $fields['focus_keyword'] ) );
+				update_term_meta( $term_id, 'rank_math_focus_keyword', wp_slash( sanitize_text_field( $fields['focus_keyword'] ) ) );
 			}
 			return self::get_term_seo( $term_id, $taxonomy );
 		}
@@ -313,7 +366,7 @@ class WPMCP_SEO {
 				delete_post_meta( $post_id, $id_key );
 				return;
 			}
-			update_post_meta( $post_id, $url_key, esc_url_raw( $url ) );
+			update_post_meta( $post_id, $url_key, wp_slash( esc_url_raw( $url ) ) );
 		}
 		if ( array_key_exists( $field . '_id', $fields ) ) {
 			$id = (int) $fields[ $field . '_id' ];

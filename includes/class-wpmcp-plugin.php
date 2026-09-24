@@ -85,6 +85,8 @@ class WPMCP_Plugin {
 		$this->rest->register();
 		$this->frontend->register();
 		$this->performance->register();
+		( new WPMCP_Health() )->register();
+		( new WPMCP_OAuth() )->register();
 
 		if ( is_admin() ) {
 			$this->admin = new WPMCP_Admin();

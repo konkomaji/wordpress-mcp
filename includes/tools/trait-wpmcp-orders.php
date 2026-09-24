@@ -3,8 +3,8 @@
  * WooCommerce order and customer tools.
  *
  * These live in their own capability group (`wc_orders`, off by default)
- * because they expose personal data — names, emails, addresses, purchase
- * history — and because refunds move real money. A content/SEO engagement
+ * because they expose personal data (names, emails, addresses, purchase
+ * history) and because refunds move real money. A content/SEO engagement
  * never needs them.
  *
  * @package WordPressMCP
@@ -344,6 +344,7 @@ trait WPMCP_Orders_Tools {
 	 */
 	private function tool_update_order( $args ) {
 		$order = $this->get_wc_order( (int) $args['id'] );
+		WPMCP_Journal::note( sprintf( 'Changes to order %d are not restored by undo. The order notes record what changed.', $order->get_id() ) );
 
 		try {
 			if ( isset( $args['customer_note'] ) ) {
@@ -403,6 +404,7 @@ trait WPMCP_Orders_Tools {
 	 */
 	private function tool_add_order_note( $args ) {
 		$order   = $this->get_wc_order( (int) $args['id'] );
+		WPMCP_Journal::note( sprintf( 'The note added to order %d is not removed by undo, and a customer note has already been emailed.', $order->get_id() ) );
 		$note_id = $order->add_order_note(
 			(string) $args['note'],
 			WPMCP_Util::bool( $args['customer_note'] ?? null ) ? 1 : 0,
@@ -441,6 +443,7 @@ trait WPMCP_Orders_Tools {
 		}
 
 		$via_gateway = WPMCP_Util::bool( $args['via_gateway'] ?? null );
+		WPMCP_Journal::note( sprintf( 'The refund on order %d cannot be undone. Money sent back through a payment gateway stays refunded.', $order->get_id() ) );
 		$refund      = wc_create_refund(
 			[
 				'order_id'       => $order->get_id(),
@@ -466,7 +469,7 @@ trait WPMCP_Orders_Tools {
 			'amount'       => $refund->get_amount(),
 			'via_gateway'  => $via_gateway,
 			'order_status' => $order->get_status(),
-			'note'         => $via_gateway ? 'Refund sent to the payment gateway.' : 'Recorded as a manual refund — no money was moved by the gateway.',
+			'note'         => $via_gateway ? 'Refund sent to the payment gateway.' : 'Recorded as a manual refund; no money was moved by the gateway.',
 		];
 	}
 
@@ -537,7 +540,7 @@ trait WPMCP_Orders_Tools {
 			WPMCP_Errors::fail(
 				WPMCP_Errors::NOT_FOUND,
 				'No customer matched.',
-				'Pass a customer id, or an email that belongs to a registered account. Guest orders have no customer record — find them with list_orders and customer_email.'
+				'Pass a customer id, or an email that belongs to a registered account. Guest orders have no customer record. Find them with list_orders and customer_email.'
 			);
 		}
 		$user = get_userdata( $id );

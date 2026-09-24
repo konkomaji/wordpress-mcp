@@ -1,6 +1,7 @@
 # Keep dev-only files out of `git archive` / release zips.
 /.gitignore     export-ignore
 /.gitattributes export-ignore
+/.github        export-ignore
 
 # Normalise line endings in the repo.
 * text=auto

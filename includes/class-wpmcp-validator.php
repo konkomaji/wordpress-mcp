@@ -46,7 +46,9 @@ class WPMCP_Validator {
 
 		$out = $args;
 		foreach ( $args as $key => $value ) {
-			if ( ! isset( $props[ $key ]['type'] ) || null === $value ) {
+			// _accept_any: the wire type is the portable subset (string or
+			// object), but any JSON value is accepted and the handler resolves it.
+			if ( ! isset( $props[ $key ]['type'] ) || null === $value || ! empty( $props[ $key ]['_accept_any'] ) ) {
 				continue;
 			}
 			$out[ $key ] = self::coerce( $name, $key, $value, (string) $props[ $key ]['type'] );
@@ -110,8 +112,18 @@ class WPMCP_Validator {
 				if ( is_array( $value ) ) {
 					return $value;
 				}
-				// A comma-separated string is a common and harmless shorthand.
 				if ( is_string( $value ) ) {
+					// Clients that stringify nested values send "[53,58]". Splitting
+					// that on commas would yield "[53" and "58]", so a string that
+					// looks like a JSON list is decoded first.
+					$trimmed = trim( $value );
+					if ( '' !== $trimmed && '[' === $trimmed[0] ) {
+						$decoded = json_decode( $trimmed, true );
+						if ( is_array( $decoded ) ) {
+							return array_values( $decoded );
+						}
+					}
+					// Otherwise a comma-separated string is a common and harmless shorthand.
 					return WPMCP_Util::to_array( $value );
 				}
 				self::type_fail( $tool, $key, 'an array', $value );

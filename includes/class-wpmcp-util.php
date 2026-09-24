@@ -19,7 +19,7 @@ class WPMCP_Util {
 	 * Count words in a string in a way that survives non-Latin scripts.
 	 *
 	 * str_word_count() only understands ASCII letters, so CJK, Devanagari,
-	 * Cyrillic, Arabic and friends all count as zero words — which made every
+	 * Cyrillic, Arabic and friends all count as zero words, which made every
 	 * such page look like thin content. This splits on Unicode whitespace and
 	 * additionally counts CJK ideographs individually, since they are not
 	 * space-separated.
@@ -99,8 +99,8 @@ class WPMCP_Util {
 	 * Validate PHP source before it is written to disk.
 	 *
 	 * A syntax error in a live theme or plugin file takes the whole site down
-	 * with a white screen, and the agent then cannot call back in to fix it —
-	 * the endpoint is dead too. Parsing first turns a fatal into a tool error.
+	 * with a white screen, and the agent then cannot call back in to fix it,
+	 * since the endpoint is dead too. Parsing first turns a fatal into a tool error.
 	 *
 	 * @param string $code Full file contents.
 	 * @return true|string True when parseable, else the parser message.
@@ -137,6 +137,87 @@ class WPMCP_Util {
 			return [];
 		}
 		return array_values( array_filter( array_map( 'trim', explode( ',', (string) $value ) ) ) );
+	}
+
+	/**
+	 * Refuse meta keys that WordPress or this plugin treat as trusted internal
+	 * state. Writing them through the generic meta tools would let a
+	 * connection point an attachment at an arbitrary file (which the media
+	 * tools later copy or delete), load a template from outside the theme, or
+	 * change a user's role. Each has a dedicated, validated tool instead.
+	 *
+	 * @param string $key         Meta key.
+	 * @param string $object_type post|term|user.
+	 * @throws WPMCP_Tool_Exception When the key is protected.
+	 */
+	public static function assert_meta_key_allowed( $key, $object_type = 'post' ) {
+		global $wpdb;
+		$key     = (string) $key;
+		$blocked = false;
+		$hint    = 'Use the dedicated tool for this data instead of the generic meta tools.';
+
+		if ( 0 === strpos( $key, '_wpmcp_' ) ) {
+			$blocked = true;
+			$hint    = 'This key holds WordPress MCP internal state. Use set_schema for JSON-LD and the media tools for image backups.';
+		} elseif ( 'post' === $object_type && in_array( $key, [ '_wp_attached_file', '_wp_attachment_metadata', '_wp_attachment_backup_sizes', '_wp_page_template' ], true ) ) {
+			$blocked = true;
+			$hint    = '_wp_page_template: use update_content with the template argument. Attachment files: use the media tools (upload_media, optimize_image, restore_image).';
+		} elseif ( 'user' === $object_type && ( in_array( $key, [ 'session_tokens', $wpdb->prefix . 'capabilities', $wpdb->prefix . 'user_level' ], true ) || preg_match( '/capabilities$|user_level$/', $key ) ) ) {
+			$blocked = true;
+			$hint    = 'Change roles with save_user.';
+		}
+
+		if ( $blocked ) {
+			WPMCP_Errors::fail(
+				WPMCP_Errors::PERMISSION_DENIED,
+				sprintf( 'The meta key "%s" is protected and cannot be written through this tool.', $key ),
+				$hint,
+				[ 'key' => $key ]
+			);
+		}
+	}
+
+	/**
+	 * Whether a path is a real file or directory inside the uploads folder.
+	 *
+	 * @param string $path Path.
+	 * @return bool
+	 */
+	public static function in_uploads( $path ) {
+		$real = realpath( (string) $path );
+		$base = realpath( wp_upload_dir( null, false )['basedir'] );
+		return $real && $base && 0 === strpos( wp_normalize_path( $real ), trailingslashit( wp_normalize_path( $base ) ) );
+	}
+
+	/**
+	 * Resolve a free-form value argument.
+	 *
+	 * Free-form arguments are advertised as strings, because several model
+	 * providers reject a property schema with no type. A client that can send
+	 * a native JSON value still may; one limited to strings sends JSON text
+	 * with format=json. Decoding is opt-in so a literal JSON string stored in
+	 * meta is never silently turned into an array.
+	 *
+	 * @param mixed  $value  Raw argument.
+	 * @param string $format raw|json.
+	 * @param string $key    Argument name, for the error message.
+	 * @return mixed
+	 * @throws WPMCP_Tool_Exception When format=json and the text is not JSON.
+	 */
+	public static function decode_value( $value, $format, $key ) {
+		if ( 'json' !== $format || ! is_string( $value ) ) {
+			return $value;
+		}
+		$decoded = json_decode( $value, true );
+		if ( null === $decoded && 'null' !== trim( $value ) ) {
+			WPMCP_Errors::fail(
+				WPMCP_Errors::INVALID_ARGUMENT,
+				sprintf( '"%s" is not valid JSON: %s.', $key, json_last_error_msg() ),
+				sprintf( 'Send "%s" as JSON text, or set value_format=raw to store the string as-is.', $key ),
+				[ 'argument' => $key ]
+			);
+		}
+		return $decoded;
 	}
 
 	/**

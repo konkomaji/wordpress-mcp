@@ -32,7 +32,7 @@ trait WPMCP_SEOTech_Tools {
 					'type'       => 'object',
 					'properties' => [
 						'post_type'      => [ 'type' => 'string', 'description' => 'Post type to crawl. Default any published type.' ],
-						'ids'            => [ 'type' => 'array', 'description' => 'Specific post IDs instead of a whole type.' ],
+						'ids'            => [ 'type' => 'array', 'items' => [ 'type' => 'integer' ], 'description' => 'Specific post IDs instead of a whole type.' ],
 						'limit'          => [ 'type' => 'integer', 'description' => 'Posts to read per run. Default 50, max 500.' ],
 						'offset'         => [ 'type' => 'integer', 'description' => 'Where to resume. Default 0.' ],
 						'max_checks'     => [ 'type' => 'integer', 'description' => 'External URLs to request per run. Default 60, max 300.' ],
@@ -46,7 +46,7 @@ trait WPMCP_SEOTech_Tools {
 			[
 				'group'       => 'content',
 				'name'        => 'get_sitemap',
-				'description' => 'Read the site\'s XML sitemap, whoever generates it — WordPress core, Yoast or Rank Math are all detected automatically. Follows a sitemap index into its children and reports how many URLs each holds, the newest lastmod, and a sample of the URLs themselves.',
+				'description' => 'Read the site\'s XML sitemap, whoever generates it. WordPress core, Yoast or Rank Math are all detected automatically. Follows a sitemap index into its children and reports how many URLs each holds, the newest lastmod, and a sample of the URLs themselves.',
 				'inputSchema' => [
 					'type'       => 'object',
 					'properties' => [
@@ -64,7 +64,7 @@ trait WPMCP_SEOTech_Tools {
 					'type'       => 'object',
 					'properties' => [
 						'url'         => [ 'type' => 'string', 'description' => 'Sitemap URL. Omit to detect it.' ],
-						'post_types'  => [ 'type' => 'array', 'description' => 'Post types that should be in the sitemap. Default: public types with an archive of content.' ],
+						'post_types'  => [ 'type' => 'array', 'items' => [ 'type' => 'string' ], 'description' => 'Post types that should be in the sitemap. Default: public types with an archive of content.' ],
 						'max_urls'    => [ 'type' => 'integer', 'description' => 'Sitemap URLs to examine. Default 500, max 3000.' ],
 						'http_check'  => [ 'type' => 'integer', 'description' => 'How many sitemap URLs to actually request, to catch 404s and redirects. Default 25, max 200. Pass 0 to skip.' ],
 					],
@@ -77,8 +77,8 @@ trait WPMCP_SEOTech_Tools {
 				'inputSchema' => [
 					'type'       => 'object',
 					'properties' => [
-						'urls'         => [ 'type' => 'array', 'description' => 'Absolute URLs on this site to submit.' ],
-						'ids'          => [ 'type' => 'array', 'description' => 'Post IDs to submit.' ],
+						'urls'         => [ 'type' => 'array', 'items' => [ 'type' => 'string' ], 'description' => 'Absolute URLs on this site to submit.' ],
+						'ids'          => [ 'type' => 'array', 'items' => [ 'type' => 'integer' ], 'description' => 'Post IDs to submit.' ],
 						'recent_days'  => [ 'type' => 'integer', 'description' => 'Submit everything modified in the last N days.' ],
 						'post_type'    => [ 'type' => 'string', 'description' => 'With recent_days: which post type. Default any public type.' ],
 						'max_urls'     => [ 'type' => 'integer', 'description' => 'Cap on URLs sent. Default 200, max 1000.' ],
@@ -187,7 +187,7 @@ trait WPMCP_SEOTech_Tools {
 						'status'        => $status['status'],
 						'redirected_to' => $status['redirected_to'],
 						'linked_from'   => $target['posts'],
-						'issue'         => 'redirect — update the link to point at the destination directly',
+						'issue'         => 'redirect: update the link to point at the destination directly',
 					];
 				}
 				continue;
@@ -222,7 +222,7 @@ trait WPMCP_SEOTech_Tools {
 		} else {
 			$result['next_step'] = $next < $total
 				? sprintf( 'Call again with offset=%d for the next batch of posts.', $next )
-				: ( $broken ? 'Fix or redirect each broken URL — manage_redirects handles the ones that moved.' : 'No broken links in the crawled set.' );
+				: ( $broken ? 'Fix or redirect each broken URL; manage_redirects handles the ones that moved.' : 'No broken links in the crawled set.' );
 		}
 
 		return $result;
@@ -301,7 +301,7 @@ trait WPMCP_SEOTech_Tools {
 		}
 
 		// An internal permalink that resolves to a published post needs no
-		// request at all — the database already knows.
+		// request at all, because the database already knows.
 		if ( $internal ) {
 			$post_id = url_to_postid( $url );
 			if ( $post_id && 'publish' === get_post_status( $post_id ) ) {
@@ -324,12 +324,12 @@ trait WPMCP_SEOTech_Tools {
 			'user-agent'  => 'WordPressMCP/' . WPMCP_VERSION . ' link-checker (+' . home_url() . ')',
 		];
 
-		$response = wp_remote_head( $url, $request );
+		$response = wp_safe_remote_head( $url, $request );
 		$status   = is_wp_error( $response ) ? 0 : (int) wp_remote_retrieve_response_code( $response );
 
 		// Plenty of servers answer HEAD with 405 or 501, or lie. Confirm with GET.
 		if ( is_wp_error( $response ) || $status >= 400 || 0 === $status ) {
-			$response = wp_remote_get( $url, array_merge( $request, [ 'limit_response_size' => 2048 ] ) );
+			$response = wp_safe_remote_get( $url, array_merge( $request, [ 'limit_response_size' => 2048 ] ) );
 			$status   = is_wp_error( $response ) ? 0 : (int) wp_remote_retrieve_response_code( $response );
 		}
 
@@ -426,7 +426,7 @@ trait WPMCP_SEOTech_Tools {
 		$candidates['generic index']  = home_url( '/sitemap_index.xml' );
 
 		foreach ( $candidates as $generator => $url ) {
-			$response = wp_remote_head( $url, [ 'timeout' => 8, 'redirection' => 3 ] );
+			$response = wp_safe_remote_head( $url, [ 'timeout' => 8, 'redirection' => 3 ] );
 			$status   = is_wp_error( $response ) ? 0 : (int) wp_remote_retrieve_response_code( $response );
 			if ( $status >= 200 && $status < 300 ) {
 				return [ 'url' => $url, 'generator' => $generator ];
@@ -452,7 +452,7 @@ trait WPMCP_SEOTech_Tools {
 		if ( ! wp_http_validate_url( $url ) ) {
 			WPMCP_Errors::fail( WPMCP_Errors::INVALID_ARGUMENT, sprintf( '"%s" is not a fetchable URL.', $url ) );
 		}
-		$response = wp_remote_get( $url, [ 'timeout' => 15, 'redirection' => 3 ] );
+		$response = wp_safe_remote_get( $url, [ 'timeout' => 15, 'redirection' => 3 ] );
 		if ( is_wp_error( $response ) ) {
 			WPMCP_Errors::from_wp_error( $response, WPMCP_Errors::UPSTREAM_FAILED, 'The sitemap could not be fetched from this server. A firewall blocking loopback requests is the usual cause.' );
 		}
@@ -461,7 +461,7 @@ trait WPMCP_SEOTech_Tools {
 			WPMCP_Errors::fail(
 				WPMCP_Errors::UPSTREAM_FAILED,
 				sprintf( 'The sitemap at %s returned HTTP %d.', $url, $status ),
-				'Check the URL in a browser — sitemaps are often disabled or renamed by an SEO plugin.',
+				'Check the URL in a browser; sitemaps are often disabled or renamed by an SEO plugin.',
 				[ 'status' => $status ]
 			);
 		}
@@ -582,7 +582,7 @@ trait WPMCP_SEOTech_Tools {
 						'url'   => $loc,
 						'id'    => $post_id,
 						'title' => get_the_title( $post_id ),
-						'issue' => 'marked noindex but listed in the sitemap — Google is told to crawl it and then told to ignore it',
+						'issue' => 'marked noindex but listed in the sitemap: Google is told to crawl it and then told to ignore it',
 					];
 				}
 				if ( 'publish' !== get_post_status( $post_id ) ) {
@@ -647,7 +647,7 @@ trait WPMCP_SEOTech_Tools {
 				if ( ! $status['ok'] ) {
 					$http[] = [ 'url' => $loc, 'status' => $status['status'], 'issue' => $status['reason'] ];
 				} elseif ( ! empty( $status['redirected_to'] ) ) {
-					$http[] = [ 'url' => $loc, 'status' => $status['status'], 'issue' => 'redirects to ' . $status['redirected_to'] . ' — a sitemap should list final URLs only' ];
+					$http[] = [ 'url' => $loc, 'status' => $status['status'], 'issue' => 'redirects to ' . $status['redirected_to'] . '; a sitemap should list final URLs only' ];
 				}
 			}
 		}
@@ -681,11 +681,15 @@ trait WPMCP_SEOTech_Tools {
 		$dry      = ! isset( $args['dry_run'] ) || WPMCP_Util::bool( $args['dry_run'], true );
 		$max_urls = min( max( 1, (int) ( $args['max_urls'] ?? 200 ) ), 1000 );
 
-		if ( WPMCP_Util::bool( $args['regenerate_key'] ?? null ) ) {
+		// A dry run must not write anything: no key is created, regenerated or
+		// saved, and the rewrite rules are left alone. It reports the key that
+		// is in place, or says a new one will be made on the real run.
+		$regenerate = WPMCP_Util::bool( $args['regenerate_key'] ?? null );
+		if ( $regenerate && ! $dry ) {
 			WPMCP_Journal::option( WPMCP_Frontend::INDEXNOW_OPTION );
 			delete_option( WPMCP_Frontend::INDEXNOW_OPTION );
 		}
-		$key = $this->indexnow_key();
+		$key = $dry ? ( $regenerate ? '' : $this->indexnow_key( false ) ) : $this->indexnow_key();
 
 		$host = wp_parse_url( home_url(), PHP_URL_HOST );
 		$urls = [];
@@ -730,22 +734,24 @@ trait WPMCP_SEOTech_Tools {
 			WPMCP_Errors::fail(
 				WPMCP_Errors::MISSING_ARGUMENT,
 				'No URLs to submit.',
-				'Pass urls, ids, or recent_days — for example recent_days=7 to push everything changed this week.',
+				'Pass urls, ids, or recent_days, for example recent_days=7 to push everything changed this week.',
 				[ 'accepted' => [ 'urls', 'ids', 'recent_days' ] ]
 			);
 		}
 		$urls          = array_slice( $urls, 0, $max_urls );
-		$key_location  = home_url( '/' . $key . '.txt' );
+		$key_location  = '' !== $key ? home_url( '/' . $key . '.txt' ) : '';
 
 		if ( $dry ) {
 			return [
 				'dry_run'      => true,
 				'host'         => $host,
-				'key'          => $key,
-				'key_location' => $key_location,
+				'key'          => '' !== $key ? $key : null,
+				'key_location' => '' !== $key_location ? $key_location : null,
 				'urls'         => $urls,
 				'count'        => count( $urls ),
-				'next_step'    => 'Nothing was submitted. Check the list, then call again with dry_run=false. The key file is served automatically at the key_location above.',
+				'next_step'    => '' !== $key
+					? 'Nothing was submitted. Check the list, then call again with dry_run=false. The key file is served automatically at the key_location above.'
+					: 'Nothing was submitted and no key was created. A new key is generated, saved and served automatically when you call again with dry_run=false.',
 			];
 		}
 
@@ -776,11 +782,11 @@ trait WPMCP_SEOTech_Tools {
 		// not be read back, which is the one failure worth explaining.
 		$explanations = [
 			200 => 'Accepted.',
-			202 => 'Accepted — the key is still being validated.',
+			202 => 'Accepted, but the key is still being validated.',
 			400 => 'Bad request: the URL list or host was rejected.',
 			403 => 'The key file could not be read back from this site. Flush permalinks, then confirm the key_location loads in a browser.',
 			422 => 'The URLs do not belong to the submitted host.',
-			429 => 'Too many submissions — wait before sending more.',
+			429 => 'Too many submissions. Wait before sending more.',
 		];
 
 		return [
@@ -793,7 +799,7 @@ trait WPMCP_SEOTech_Tools {
 			'key_location' => $key_location,
 			'urls'         => array_slice( $urls, 0, 50 ),
 			'next_step'    => in_array( $status, [ 200, 202 ], true )
-				? 'Bing, Yandex, Naver and Seznam share IndexNow submissions. Google does not participate — it still discovers changes through the sitemap.'
+				? 'Bing, Yandex, Naver and Seznam share IndexNow submissions. Google does not participate; it still discovers changes through the sitemap.'
 				: 'Submission was refused. Read the explanation, fix the cause, and resubmit.',
 		];
 	}
@@ -801,11 +807,17 @@ trait WPMCP_SEOTech_Tools {
 	/**
 	 * The site's IndexNow key, generating and storing one on first use.
 	 *
-	 * @return string
+	 * @param bool $create Generate and save a key when none is stored. False
+	 *                     for a dry run, which must not write anything.
+	 * @return string The key, or '' when none exists and $create is false.
 	 */
-	private function indexnow_key() {
+	private function indexnow_key( $create = true ) {
 		$key = (string) get_option( WPMCP_Frontend::INDEXNOW_OPTION, '' );
 		if ( '' === $key || ! preg_match( '/^[a-f0-9]{32}$/', $key ) ) {
+			if ( ! $create ) {
+				return '';
+			}
+			WPMCP_Journal::option( WPMCP_Frontend::INDEXNOW_OPTION );
 			$key = md5( wp_generate_password( 40, false, false ) . home_url() );
 			update_option( WPMCP_Frontend::INDEXNOW_OPTION, $key, false );
 			// The key file is served through a rewrite rule; make sure it exists.

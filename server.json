@@ -1,0 +1,32 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.konkomaji/wordpress-mcp",
+  "title": "WordPress MCP",
+  "description": "Talk to your WordPress site: content, SEO, WooCommerce, page builders, media and speed, with undo.",
+  "repository": {
+    "url": "https://github.com/konkomaji/wordpress-mcp",
+    "source": "github"
+  },
+  "websiteUrl": "https://github.com/konkomaji/wordpress-mcp",
+  "version": "2.0.0",
+  "remotes": [
+    {
+      "type": "streamable-http",
+      "url": "https://{site}/wp-json/wp-mcp/v1/mcp",
+      "variables": {
+        "site": {
+          "description": "Your WordPress site's domain, plus its folder if WordPress is installed in one, e.g. example.com or example.com/blog. Install and activate the WordPress MCP plugin there first.",
+          "isRequired": true
+        }
+      },
+      "headers": [
+        {
+          "name": "Authorization",
+          "description": "\"Bearer \" followed by a key from WordPress MCP settings. Leave empty to sign in with WordPress (OAuth) instead.",
+          "isRequired": false,
+          "isSecret": true
+        }
+      ]
+    }
+  ]
+}

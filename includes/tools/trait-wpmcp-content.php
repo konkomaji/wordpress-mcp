@@ -137,11 +137,11 @@ trait WPMCP_Content_Tools {
 			[
 				'group'       => 'content',
 				'name'        => 'bulk_update_content',
-				'description' => 'Apply the same change to many posts at once — status, author, parent, comment status, taxonomy terms (set/add/remove), meta, or normalised SEO fields. Target by explicit ids, or by a post_type/status/taxonomy query. Returns per-id results.',
+				'description' => 'Apply the same change to many posts at once: status, author, parent, comment status, taxonomy terms (set/add/remove), meta, or normalised SEO fields. Target by explicit ids, or by a post_type/status/taxonomy query. Returns per-id results.',
 				'inputSchema' => [
 					'type'       => 'object',
 					'properties' => [
-						'ids'         => [ 'type' => 'array', 'description' => 'Explicit post IDs. Takes precedence over the query filters.' ],
+						'ids'         => [ 'type' => 'array', 'items' => [ 'type' => 'integer' ], 'description' => 'Explicit post IDs. Takes precedence over the query filters.' ],
 						'post_type'   => [ 'type' => 'string', 'description' => 'Query filter when ids is omitted.' ],
 						'post_status' => [ 'type' => 'string' ],
 						'taxonomy'    => [ 'type' => 'string' ],
@@ -158,14 +158,14 @@ trait WPMCP_Content_Tools {
 			[
 				'group'       => 'content',
 				'name'        => 'search_replace_content',
-				'description' => 'Find and replace a string across post content, titles, or excerpts — for domain moves, rebrands, or fixing a repeated typo site-wide. DRY RUN BY DEFAULT: returns matching posts and a preview until dry_run=false is passed explicitly.',
+				'description' => 'Find and replace a string across post content, titles, or excerpts, for domain moves, rebrands, or fixing a repeated typo site-wide. DRY RUN BY DEFAULT: returns matching posts and a preview until dry_run=false is passed explicitly.',
 				'inputSchema' => [
 					'type'       => 'object',
 					'properties' => [
 						'search'     => [ 'type' => 'string', 'description' => 'Exact string to find.' ],
 						'replace'    => [ 'type' => 'string', 'description' => 'Replacement string.' ],
 						'post_type'  => [ 'type' => 'string', 'description' => "Post type or 'any'. Default 'any'." ],
-						'fields'     => [ 'type' => 'array', 'description' => "Which fields to touch: content|title|excerpt. Default ['content']." ],
+						'fields'     => [ 'type' => 'array', 'items' => [ 'type' => 'string' ], 'description' => "Which fields to touch: content|title|excerpt. Default ['content']." ],
 						'regex'      => [ 'type' => 'boolean', 'description' => 'Treat search as a regular expression body (no delimiters). Default false.' ],
 						'limit'      => [ 'type' => 'integer', 'description' => 'Max posts to scan. Default 200, max 1000.' ],
 						'dry_run'    => [ 'type' => 'boolean', 'description' => 'Default TRUE. Set false to actually write.' ],
@@ -210,7 +210,7 @@ trait WPMCP_Content_Tools {
 					'type'       => 'object',
 					'properties' => [
 						'id'     => [ 'type' => 'integer' ],
-						'schema' => [ 'description' => 'JSON-LD object or array of objects.' ],
+						'schema' => [ 'type' => 'object', '_accept_any' => true, 'description' => 'JSON-LD object. For several nodes use {"@context":"https://schema.org","@graph":[...]}. A JSON string or an array of objects is also accepted. Empty removes the schema.' ],
 					],
 					'required'   => [ 'id' ],
 				],
@@ -233,7 +233,7 @@ trait WPMCP_Content_Tools {
 					'type'       => 'object',
 					'properties' => [
 						'post_type'         => [ 'type' => 'string', 'description' => 'Post type to walk. Default post.' ],
-						'ids'               => [ 'type' => 'array', 'description' => 'Specific post IDs instead of a whole type.' ],
+						'ids'               => [ 'type' => 'array', 'items' => [ 'type' => 'integer' ], 'description' => 'Specific post IDs instead of a whole type.' ],
 						'title_template'    => [ 'type' => 'string', 'description' => 'Template for the SEO title, e.g. "{title} {separator} {site}".' ],
 						'description_template' => [ 'type' => 'string', 'description' => 'Template for the meta description.' ],
 						'focus_keyword_template' => [ 'type' => 'string', 'description' => 'Template for the focus keyword.' ],
@@ -248,15 +248,15 @@ trait WPMCP_Content_Tools {
 			[
 				'group'       => 'content',
 				'name'        => 'serp_preview',
-				'description' => 'Show how a page will look in Google: the title and description that will actually be used, their rendered pixel width, and where each one gets truncated. Character counts mislead — "Illinois" and "MMMMMMMM" are both eight characters and one is three times wider. Pass post IDs, or raw title/description text to check a draft before writing it.',
+				'description' => 'Show how a page will look in Google: the title and description that will actually be used, their rendered pixel width, and where each one gets truncated. Character counts mislead: "Illinois" and "MMMMMMMM" are both eight characters and one is three times wider. Pass post IDs, or raw title/description text to check a draft before writing it.',
 				'inputSchema' => [
 					'type'       => 'object',
 					'properties' => [
-						'ids'         => [ 'type' => 'array', 'description' => 'Post IDs to preview.' ],
+						'ids'         => [ 'type' => 'array', 'items' => [ 'type' => 'integer' ], 'description' => 'Post IDs to preview.' ],
 						'id'          => [ 'type' => 'integer', 'description' => 'A single post ID.' ],
 						'title'       => [ 'type' => 'string', 'description' => 'Raw title text to measure instead of a post.' ],
 						'description' => [ 'type' => 'string', 'description' => 'Raw meta description text to measure.' ],
-						'device'      => [ 'type' => 'string', 'description' => 'desktop (default) or mobile — the truncation width differs.' ],
+						'device'      => [ 'type' => 'string', 'description' => 'desktop (default) or mobile; the truncation width differs.' ],
 					],
 				],
 			],
@@ -269,8 +269,8 @@ trait WPMCP_Content_Tools {
 					'properties' => [
 						'id'    => [ 'type' => 'integer' ],
 						'type'  => [ 'type' => 'string', 'description' => 'Schema type. Default Article.' ],
-						'faqs'  => [ 'type' => 'array', 'description' => 'For FAQPage: array of {question, answer}.' ],
-						'steps' => [ 'type' => 'array', 'description' => 'For HowTo: array of {name, text}.' ],
+						'faqs'  => [ 'type' => 'array', 'items' => [ 'type' => 'object', 'properties' => [ 'question' => [ 'type' => 'string' ], 'answer' => [ 'type' => 'string' ] ] ], 'description' => 'For FAQPage: array of {question, answer}.' ],
+						'steps' => [ 'type' => 'array', 'items' => [ 'type' => 'object', 'properties' => [ 'name' => [ 'type' => 'string' ], 'text' => [ 'type' => 'string' ] ] ], 'description' => 'For HowTo: array of {name, text}.' ],
 						'apply' => [ 'type' => 'boolean', 'description' => 'Write the schema to the post. Default false (preview only).' ],
 					],
 					'required'   => [ 'id' ],
@@ -292,7 +292,7 @@ trait WPMCP_Content_Tools {
 			[
 				'group'       => 'content',
 				'name'        => 'internal_link_opportunities',
-				'description' => 'Find internal-linking opportunities: other published posts whose body mentions a keyword (or the target post\'s title) but do not yet link to the target post. Returns candidate posts with the matched phrase and a context snippet. Read-only — boosts topical authority for SEO.',
+				'description' => 'Find internal-linking opportunities: other published posts whose body mentions a keyword (or the target post\'s title) but do not yet link to the target post. Returns candidate posts with the matched phrase and a context snippet. Read-only. Boosts topical authority for SEO.',
 				'inputSchema' => [
 					'type'       => 'object',
 					'properties' => [
@@ -310,7 +310,7 @@ trait WPMCP_Content_Tools {
 				'inputSchema' => [
 					'type'       => 'object',
 					'properties' => [
-						'action'  => [ 'type' => 'string', 'description' => 'get|set. Default get.' ],
+						'action'  => [ 'type' => 'string', 'enum' => [ 'get', 'set' ], 'description' => 'get|set. Default get.' ],
 						'content' => [ 'type' => 'string', 'description' => 'Markdown body for action=set.' ],
 					],
 				],
@@ -318,11 +318,11 @@ trait WPMCP_Content_Tools {
 			[
 				'group'       => 'content',
 				'name'        => 'manage_robots_txt',
-				'description' => 'Get or set extra robots.txt directives appended to the site\'s virtual robots.txt — including AI/GEO crawler control (GPTBot, ClaudeBot, Google-Extended, PerplexityBot, CCBot, etc.). action=get returns current extra rules + the effective robots.txt; action=set stores new rules.',
+				'description' => 'Get or set extra robots.txt directives appended to the site\'s virtual robots.txt, including AI/GEO crawler control (GPTBot, ClaudeBot, Google-Extended, PerplexityBot, CCBot, etc.). action=get returns current extra rules + the effective robots.txt; action=set stores new rules.',
 				'inputSchema' => [
 					'type'       => 'object',
 					'properties' => [
-						'action'  => [ 'type' => 'string', 'description' => 'get|set. Default get.' ],
+						'action'  => [ 'type' => 'string', 'enum' => [ 'get', 'set' ], 'description' => 'get|set. Default get.' ],
 						'content' => [ 'type' => 'string', 'description' => 'Raw robots.txt directives for action=set.' ],
 					],
 				],
@@ -334,7 +334,7 @@ trait WPMCP_Content_Tools {
 				'inputSchema' => [
 					'type'       => 'object',
 					'properties' => [
-						'action' => [ 'type' => 'string', 'description' => 'list|add|delete. Default list.' ],
+						'action' => [ 'type' => 'string', 'enum' => [ 'list', 'add', 'delete' ], 'description' => 'list|add|delete. Default list.' ],
 						'from'   => [ 'type' => 'string', 'description' => 'Source path, e.g. /old-page.' ],
 						'to'     => [ 'type' => 'string', 'description' => 'Destination path or URL.' ],
 						'code'   => [ 'type' => 'integer', 'description' => '301|302|307|308. Default 301.' ],
@@ -436,7 +436,8 @@ trait WPMCP_Content_Tools {
 						'object_type' => [ 'type' => 'string', 'description' => 'post|term|user.' ],
 						'object_id'   => [ 'type' => 'integer' ],
 						'key'         => [ 'type' => 'string' ],
-						'value'       => [],
+						'value'       => [ 'type' => 'string', '_accept_any' => true, 'description' => 'Value to store. Strings are stored as-is. For a number, boolean, array or object, pass its JSON and set value_format=json (a native JSON value is also accepted).' ],
+						'value_format' => [ 'type' => 'string', 'enum' => [ 'raw', 'json' ], 'description' => 'raw (default): store value exactly as sent. json: decode value from JSON first.' ],
 					],
 					'required'   => [ 'object_type', 'object_id', 'key' ],
 				],
@@ -597,7 +598,7 @@ trait WPMCP_Content_Tools {
 	private function tool_list_content( $args ) {
 		$per_page = min( (int) ( $args['posts_per_page'] ?? 50 ) ?: 50, 200 );
 		$query    = [
-			'post_type'      => $args['post_type'] ?? 'any',
+			'post_type'      => $this->content_post_type_arg( $args['post_type'] ?? 'any' ),
 			'post_status'    => $args['post_status'] ?? 'any',
 			'posts_per_page' => $per_page,
 			'paged'          => (int) ( $args['paged'] ?? 1 ),
@@ -662,10 +663,7 @@ trait WPMCP_Content_Tools {
 	 */
 	private function tool_get_content( $args ) {
 		$id = (int) $args['id'];
-		$p  = get_post( $id );
-		if ( ! $p ) {
-			throw new Exception( 'Content not found' );
-		}
+		$p  = $this->require_content_post( $id );
 		$terms = [];
 		foreach ( get_object_taxonomies( $p->post_type ) as $tax ) {
 			$terms[ $tax ] = wp_get_post_terms( $id, $tax, [ 'fields' => 'names' ] );
@@ -707,8 +705,10 @@ trait WPMCP_Content_Tools {
 	 * @return array
 	 */
 	private function tool_publish_content( $args ) {
+		$post_type = sanitize_key( $args['post_type'] ?? 'post' );
+		$this->assert_content_post_type( $post_type );
 		$insert = [
-			'post_type'    => sanitize_key( $args['post_type'] ?? 'post' ),
+			'post_type'    => $post_type,
 			'post_title'   => $args['title'],
 			'post_content' => $args['content'] ?? '',
 			'post_excerpt' => $args['excerpt'] ?? '',
@@ -730,7 +730,7 @@ trait WPMCP_Content_Tools {
 		if ( ! empty( $args['date'] ) ) {
 			$date = WPMCP_Util::date( $args['date'] );
 			if ( '' === $date ) {
-				throw new Exception( 'Could not parse the date argument' );
+				$this->fail_bad_date( $args['date'] );
 			}
 			$insert['post_date']     = get_date_from_gmt( $date );
 			$insert['post_date_gmt'] = $date;
@@ -740,12 +740,19 @@ trait WPMCP_Content_Tools {
 			}
 		}
 		if ( ! empty( $args['meta'] ) && is_array( $args['meta'] ) ) {
+			foreach ( array_keys( $args['meta'] ) as $k ) {
+				WPMCP_Util::assert_meta_key_allowed( $k, 'post' );
+			}
 			$insert['meta_input'] = $args['meta'];
 		}
-		$id = wp_insert_post( $insert, true );
+		// wp_insert_post() unslashes everything it is given, meta_input
+		// included, so unslashed agent input would lose its backslashes:
+		// "C:\path" became "C:path" and JSON escapes such as \u003c broke.
+		$id = wp_insert_post( wp_slash( $insert ), true );
 		if ( is_wp_error( $id ) ) {
-			throw new Exception( $id->get_error_message() );
+			WPMCP_Errors::from_wp_error( $id, WPMCP_Errors::INVALID_ARGUMENT, 'Check post_type, status, parent and author against list_post_types and list_users.' );
 		}
+		WPMCP_Journal::note( sprintf( 'Post %d created by publish_content is not deleted by undo. Delete it with delete_content if it is not wanted.', $id ) );
 		if ( ! empty( $args['terms'] ) ) {
 			$this->apply_terms( $id, $args['terms'] );
 		}
@@ -771,8 +778,9 @@ trait WPMCP_Content_Tools {
 	 */
 	private function tool_update_content( $args ) {
 		$id = (int) $args['id'];
-		if ( ! get_post( $id ) ) {
-			throw new Exception( 'Content not found' );
+		$this->require_content_post( $id );
+		foreach ( array_keys( isset( $args['meta'] ) && is_array( $args['meta'] ) ? $args['meta'] : [] ) as $k ) {
+			WPMCP_Util::assert_meta_key_allowed( $k, 'post' );
 		}
 		$update = [ 'ID' => $id ];
 		if ( isset( $args['title'] ) ) {
@@ -805,26 +813,31 @@ trait WPMCP_Content_Tools {
 		if ( ! empty( $args['date'] ) ) {
 			$date = WPMCP_Util::date( $args['date'] );
 			if ( '' === $date ) {
-				throw new Exception( 'Could not parse the date argument' );
+				$this->fail_bad_date( $args['date'] );
 			}
 			$update['post_date']     = get_date_from_gmt( $date );
 			$update['post_date_gmt'] = $date;
 		}
 		if ( count( $update ) > 1 ) {
-			$result = wp_update_post( $update, true );
+			WPMCP_Journal::post_fields( $id, array_keys( array_diff_key( $update, [ 'ID' => 1 ] ) ) );
+			// Slashed because wp_update_post() unslashes its input.
+			$result = wp_update_post( wp_slash( $update ), true );
 			if ( is_wp_error( $result ) ) {
-				throw new Exception( $result->get_error_message() );
+				WPMCP_Errors::from_wp_error( $result, WPMCP_Errors::INVALID_ARGUMENT, 'Check the status, parent and author values, then retry.' );
 			}
 		}
 		if ( ! empty( $args['meta'] ) && is_array( $args['meta'] ) ) {
 			foreach ( $args['meta'] as $k => $v ) {
-				update_post_meta( $id, $k, $v );
+				WPMCP_Journal::post_meta( $id, $k );
+				update_post_meta( $id, $k, wp_slash( $v ) );
 			}
 		}
 		if ( ! empty( $args['terms'] ) ) {
+			WPMCP_Journal::note( 'Taxonomy terms changed by update_content are not restored by undo.' );
 			$this->apply_terms( $id, $args['terms'] );
 		}
 		if ( isset( $args['featured_image'] ) ) {
+			WPMCP_Journal::post_meta( $id, '_thumbnail_id' );
 			if ( (int) $args['featured_image'] > 0 ) {
 				set_post_thumbnail( $id, (int) $args['featured_image'] );
 			} else {
@@ -832,6 +845,7 @@ trait WPMCP_Content_Tools {
 			}
 		}
 		if ( ! empty( $args['seo'] ) && is_array( $args['seo'] ) ) {
+			WPMCP_Journal::post_seo( $id );
 			WPMCP_SEO::set_post_seo( $id, $args['seo'] );
 		}
 		return [
@@ -848,12 +862,20 @@ trait WPMCP_Content_Tools {
 	 */
 	private function tool_delete_content( $args ) {
 		$id = (int) $args['id'];
-		if ( ! get_post( $id ) ) {
-			throw new Exception( 'Content not found' );
-		}
-		$result = wp_delete_post( $id, WPMCP_Util::bool( $args['force'] ?? null ) );
+		$this->require_content_post( $id );
+		$force = WPMCP_Util::bool( $args['force'] ?? null );
+		WPMCP_Journal::note(
+			$force
+				? sprintf( 'Post %d was permanently deleted by delete_content and is not restored by undo.', $id )
+				: sprintf( 'Post %d was moved to the trash by delete_content. Undo does not untrash it, so restore it from the trash instead.', $id )
+		);
+		$result = wp_delete_post( $id, $force );
 		if ( ! $result ) {
-			throw new Exception( 'Delete failed' );
+			WPMCP_Errors::fail(
+				WPMCP_Errors::IO_FAILED,
+				sprintf( 'Post %d could not be deleted.', $id ),
+				'A plugin may have blocked the deletion through the pre_delete_post filter. Check get_error_log.'
+			);
 		}
 		return [ 'success' => true, 'id' => $id ];
 	}
@@ -864,27 +886,29 @@ trait WPMCP_Content_Tools {
 	 */
 	private function tool_duplicate_content( $args ) {
 		$id = (int) $args['id'];
-		$p  = get_post( $id );
-		if ( ! $p ) {
-			throw new Exception( 'Content not found' );
-		}
+		$p  = $this->require_content_post( $id );
+		// The source is copied as stored and wp_insert_post() unslashes, so
+		// it has to be slashed to arrive intact.
 		$new_id = wp_insert_post(
-			[
-				'post_type'      => $p->post_type,
-				'post_title'     => (string) ( $args['title'] ?? $p->post_title . ' (copy)' ),
-				'post_content'   => $p->post_content,
-				'post_excerpt'   => $p->post_excerpt,
-				'post_status'    => $args['status'] ?? 'draft',
-				'post_parent'    => $p->post_parent,
-				'post_author'    => $p->post_author,
-				'menu_order'     => $p->menu_order,
-				'comment_status' => $p->comment_status,
-			],
+			wp_slash(
+				[
+					'post_type'      => $p->post_type,
+					'post_title'     => (string) ( $args['title'] ?? $p->post_title . ' (copy)' ),
+					'post_content'   => $p->post_content,
+					'post_excerpt'   => $p->post_excerpt,
+					'post_status'    => $args['status'] ?? 'draft',
+					'post_parent'    => $p->post_parent,
+					'post_author'    => $p->post_author,
+					'menu_order'     => $p->menu_order,
+					'comment_status' => $p->comment_status,
+				]
+			),
 			true
 		);
 		if ( is_wp_error( $new_id ) ) {
-			throw new Exception( $new_id->get_error_message() );
+			WPMCP_Errors::from_wp_error( $new_id, WPMCP_Errors::IO_FAILED, 'The copy could not be created. Check get_error_log for a plugin blocking wp_insert_post.' );
 		}
+		WPMCP_Journal::note( sprintf( 'Post %d created by duplicate_content is not deleted by undo. Delete it with delete_content if it is not wanted.', $new_id ) );
 		// Copy meta, skipping internal keys WordPress rebuilds itself.
 		$skip = [ '_edit_lock', '_edit_last', '_wp_old_slug', '_wp_old_date' ];
 		foreach ( get_post_meta( $id ) as $key => $values ) {
@@ -892,7 +916,7 @@ trait WPMCP_Content_Tools {
 				continue;
 			}
 			foreach ( (array) $values as $value ) {
-				add_post_meta( $new_id, $key, maybe_unserialize( $value ) );
+				add_post_meta( $new_id, $key, wp_slash( maybe_unserialize( $value ) ) );
 			}
 		}
 		foreach ( get_object_taxonomies( $p->post_type ) as $tax ) {
@@ -917,7 +941,7 @@ trait WPMCP_Content_Tools {
 		$ids = array_map( 'intval', WPMCP_Util::to_array( $args['ids'] ?? [] ) );
 		if ( ! $ids ) {
 			$query = [
-				'post_type'      => $args['post_type'] ?? 'any',
+				'post_type'      => $this->content_post_type_arg( $args['post_type'] ?? 'any' ),
 				'post_status'    => $args['post_status'] ?? 'any',
 				'posts_per_page' => min( (int) ( $args['limit'] ?? 100 ) ?: 100, 500 ),
 				'fields'         => 'ids',
@@ -939,6 +963,9 @@ trait WPMCP_Content_Tools {
 		}
 
 		$set     = isset( $args['set'] ) && is_array( $args['set'] ) ? $args['set'] : [];
+		foreach ( array_keys( isset( $set['meta'] ) && is_array( $set['meta'] ) ? $set['meta'] : [] ) as $k ) {
+			WPMCP_Util::assert_meta_key_allowed( $k, 'post' );
+		}
 		$dry     = WPMCP_Util::bool( $args['dry_run'] ?? null );
 		$results = [];
 		$updated = 0;
@@ -947,6 +974,10 @@ trait WPMCP_Content_Tools {
 			$post = get_post( $id );
 			if ( ! $post ) {
 				$results[] = [ 'id' => $id, 'ok' => false, 'error' => 'not found' ];
+				continue;
+			}
+			if ( ! $this->is_content_post_type( $post->post_type ) ) {
+				$results[] = [ 'id' => $id, 'ok' => false, 'error' => sprintf( '"%s" is a private data type that content tools cannot change.', $post->post_type ) ];
 				continue;
 			}
 			if ( $dry ) {
@@ -962,19 +993,23 @@ trait WPMCP_Content_Tools {
 				}
 				if ( count( $update ) > 1 ) {
 					WPMCP_Journal::post_fields( $id, array_keys( array_diff_key( $update, [ 'ID' => 1 ] ) ) );
-					$res = wp_update_post( $update, true );
+					$res = wp_update_post( wp_slash( $update ), true );
 					if ( is_wp_error( $res ) ) {
-						throw new Exception( $res->get_error_message() );
+						WPMCP_Errors::from_wp_error( $res, WPMCP_Errors::INVALID_ARGUMENT );
 					}
 				}
 				if ( ! empty( $set['meta'] ) && is_array( $set['meta'] ) ) {
 					foreach ( $set['meta'] as $k => $v ) {
 						WPMCP_Journal::post_meta( $id, $k );
-						update_post_meta( $id, $k, $v );
+						update_post_meta( $id, $k, wp_slash( $v ) );
 					}
 				}
 				if ( ! empty( $set['seo'] ) && is_array( $set['seo'] ) ) {
+					WPMCP_Journal::post_seo( $id );
 					WPMCP_SEO::set_post_seo( $id, $set['seo'] );
+				}
+				if ( ! empty( $args['set_terms'] ) || ! empty( $args['add_terms'] ) || ! empty( $args['remove_terms'] ) ) {
+					WPMCP_Journal::note( 'Taxonomy terms changed by bulk_update_content are not restored by undo.' );
 				}
 				foreach ( [ 'set_terms' => false, 'add_terms' => true ] as $key => $append ) {
 					if ( ! empty( $args[ $key ] ) && is_array( $args[ $key ] ) ) {
@@ -1010,7 +1045,7 @@ trait WPMCP_Content_Tools {
 	private function tool_search_replace_content( $args ) {
 		$search = (string) $args['search'];
 		if ( '' === $search ) {
-			throw new Exception( 'search must not be empty' );
+			WPMCP_Errors::fail( WPMCP_Errors::INVALID_ARGUMENT, 'search must not be empty.', 'Pass the exact text (or, with regex=true, the pattern) to find.' );
 		}
 		$replace = (string) ( $args['replace'] ?? '' );
 		$fields  = WPMCP_Util::to_array( $args['fields'] ?? [ 'content' ] );
@@ -1023,14 +1058,19 @@ trait WPMCP_Content_Tools {
 		// dry_run defaults to TRUE: a site-wide replace is not something to do
 		// by accident, so the caller has to ask for the write explicitly.
 		$dry     = ! isset( $args['dry_run'] ) || WPMCP_Util::bool( $args['dry_run'], true );
-		$pattern = $regex ? '/' . str_replace( '/', '\/', $search ) . '/u' : '';
+		$pattern = $regex ? '/' . $this->escape_regex_delimiter( $search ) . '/u' : '';
 		if ( $regex && false === @preg_match( $pattern, '' ) ) {
-			throw new Exception( 'Invalid regular expression' );
+			WPMCP_Errors::fail(
+				WPMCP_Errors::INVALID_ARGUMENT,
+				'search is not a valid regular expression.',
+				'Pass the pattern body without delimiters or flags, e.g. "colou?r". Escape literal special characters with a backslash.',
+				[ 'pattern' => $search ]
+			);
 		}
 
 		$q = new WP_Query(
 			[
-				'post_type'      => $args['post_type'] ?? 'any',
+				'post_type'      => $this->content_post_type_arg( $args['post_type'] ?? 'any' ),
 				'post_status'    => 'any',
 				'posts_per_page' => min( (int) ( $args['limit'] ?? 200 ) ?: 200, 1000 ),
 				's'              => $regex ? '' : $search,
@@ -1043,6 +1083,9 @@ trait WPMCP_Content_Tools {
 		$total   = 0;
 
 		foreach ( $q->posts as $p ) {
+			if ( ! $this->is_content_post_type( $p->post_type ) ) {
+				continue;
+			}
 			$update = [ 'ID' => $p->ID ];
 			$counts = [];
 			foreach ( $fields as $field ) {
@@ -1074,7 +1117,7 @@ trait WPMCP_Content_Tools {
 			];
 			if ( ! $dry ) {
 				WPMCP_Journal::post_fields( $p->ID, array_keys( array_diff_key( $update, [ 'ID' => 1 ] ) ) );
-				$res = wp_update_post( $update, true );
+				$res = wp_update_post( wp_slash( $update ), true );
 				if ( ! is_wp_error( $res ) ) {
 					$changed++;
 				}
@@ -1090,7 +1133,7 @@ trait WPMCP_Content_Tools {
 			'total_occurrences' => $total,
 			'posts_updated'     => $dry ? 0 : $changed,
 			'matches'           => $hits,
-			'note'              => $dry ? 'Dry run — nothing was written. Call again with dry_run=false to apply.' : 'Applied.',
+			'note'              => $dry ? 'Dry run: nothing was written. Call again with dry_run=false to apply.' : 'Applied.',
 		];
 	}
 
@@ -1103,7 +1146,7 @@ trait WPMCP_Content_Tools {
 		$id   = (int) $args['id'];
 		if ( 'term' === $type ) {
 			if ( empty( $args['taxonomy'] ) ) {
-				throw new Exception( 'taxonomy is required for term SEO' );
+				$this->fail_term_taxonomy_missing();
 			}
 			return WPMCP_SEO::get_term_seo( $id, $args['taxonomy'] );
 		}
@@ -1120,13 +1163,13 @@ trait WPMCP_Content_Tools {
 		$fields = (array) $args['fields'];
 		if ( 'term' === $type ) {
 			if ( empty( $args['taxonomy'] ) ) {
-				throw new Exception( 'taxonomy is required for term SEO' );
+				$this->fail_term_taxonomy_missing();
 			}
+			$this->require_term( $id, (string) $args['taxonomy'] );
+			WPMCP_Journal::term_seo( $id, (string) $args['taxonomy'] );
 			$seo = WPMCP_SEO::set_term_seo( $id, $args['taxonomy'], $fields );
 		} else {
-			if ( ! get_post( $id ) ) {
-				throw new Exception( 'Post not found' );
-			}
+			$this->require_content_post( $id );
 			WPMCP_Journal::post_seo( $id );
 			$seo = WPMCP_SEO::set_post_seo( $id, $fields );
 		}
@@ -1139,18 +1182,25 @@ trait WPMCP_Content_Tools {
 	 */
 	private function tool_set_schema( $args ) {
 		$id = (int) $args['id'];
-		if ( ! get_post( $id ) ) {
-			throw new Exception( 'Post not found' );
-		}
+		$this->require_content_post( $id );
 		$schema = $args['schema'] ?? null;
+		// Clients restricted to typed schemas may send the JSON-LD as a string.
+		if ( is_string( $schema ) && '' !== trim( $schema ) ) {
+			$schema = WPMCP_Util::decode_value( $schema, 'json', 'schema' );
+		}
 		if ( empty( $schema ) ) {
+			WPMCP_Journal::post_meta( $id, WPMCP_Frontend::JSONLD_META );
 			delete_post_meta( $id, WPMCP_Frontend::JSONLD_META );
 			return [ 'success' => true, 'id' => $id, 'schema' => null ];
 		}
 		// Store as compact JSON string; validate by re-encoding.
 		$json = wp_json_encode( $schema );
 		if ( false === $json ) {
-			throw new Exception( 'Invalid schema — could not encode to JSON' );
+			WPMCP_Errors::fail(
+				WPMCP_Errors::INVALID_ARGUMENT,
+				'The schema could not be encoded as JSON.',
+				'Pass a JSON-LD object (or a JSON string of one) containing only strings, numbers, booleans, arrays and objects, in valid UTF-8.'
+			);
 		}
 		WPMCP_Journal::post_meta( $id, WPMCP_Frontend::JSONLD_META );
 		update_post_meta( $id, WPMCP_Frontend::JSONLD_META, wp_slash( $json ) );
@@ -1177,6 +1227,7 @@ trait WPMCP_Content_Tools {
 	private function tool_manage_llms_txt( $args ) {
 		$action = $args['action'] ?? 'get';
 		if ( 'set' === $action ) {
+			WPMCP_Journal::option( WPMCP_Frontend::LLMS_OPTION );
 			update_option( WPMCP_Frontend::LLMS_OPTION, (string) ( $args['content'] ?? '' ) );
 			WPMCP_Frontend::flush();
 			return [
@@ -1341,7 +1392,7 @@ trait WPMCP_Content_Tools {
 		}
 		$terms = get_terms( $query );
 		if ( is_wp_error( $terms ) ) {
-			throw new Exception( $terms->get_error_message() );
+			WPMCP_Errors::from_wp_error( $terms, WPMCP_Errors::INVALID_ARGUMENT, 'Check the taxonomy slug with list_taxonomies.' );
 		}
 		$out = [];
 		foreach ( $terms as $t ) {
@@ -1366,10 +1417,23 @@ trait WPMCP_Content_Tools {
 	private function tool_save_term( $args ) {
 		$taxonomy = $args['taxonomy'];
 		if ( ! taxonomy_exists( $taxonomy ) ) {
-			throw new Exception( 'Unknown taxonomy: ' . $taxonomy );
+			WPMCP_Errors::fail(
+				WPMCP_Errors::NOT_FOUND,
+				sprintf( 'Unknown taxonomy "%s".', $taxonomy ),
+				'Call list_taxonomies for the registered taxonomy slugs.',
+				[ 'taxonomy' => $taxonomy ]
+			);
+		}
+		// Validate every meta key before anything is written, so a refused key
+		// does not leave the term half updated.
+		if ( ! empty( $args['meta'] ) && is_array( $args['meta'] ) ) {
+			foreach ( array_keys( $args['meta'] ) as $k ) {
+				WPMCP_Util::assert_meta_key_allowed( $k, 'term' );
+			}
 		}
 		if ( ! empty( $args['term_id'] ) ) {
 			$term_id = (int) $args['term_id'];
+			$this->require_term( $term_id, $taxonomy );
 			$fields  = [];
 			foreach ( [ 'name', 'description', 'slug' ] as $key ) {
 				if ( isset( $args[ $key ] ) ) {
@@ -1380,14 +1444,20 @@ trait WPMCP_Content_Tools {
 				$fields['parent'] = (int) $args['parent'];
 			}
 			if ( $fields ) {
-				$result = wp_update_term( $term_id, $taxonomy, $fields );
+				WPMCP_Journal::note( sprintf( 'Name, slug, description and parent changes to term %d are not restored by undo.', $term_id ) );
+				// wp_update_term() unslashes name and description.
+				$result = wp_update_term( $term_id, $taxonomy, wp_slash( $fields ) );
 				if ( is_wp_error( $result ) ) {
-					throw new Exception( $result->get_error_message() );
+					WPMCP_Errors::from_wp_error( $result, WPMCP_Errors::CONFLICT, 'A term with that name or slug may already exist. Check list_terms.' );
 				}
 			}
 		} else {
 			if ( empty( $args['name'] ) ) {
-				throw new Exception( 'name is required to create a term' );
+				WPMCP_Errors::fail(
+					WPMCP_Errors::MISSING_ARGUMENT,
+					'name is required to create a term.',
+					'Pass name, or pass term_id to update an existing term.'
+				);
 			}
 			$create = [
 				'description' => $args['description'] ?? '',
@@ -1396,18 +1466,22 @@ trait WPMCP_Content_Tools {
 			if ( ! empty( $args['slug'] ) ) {
 				$create['slug'] = sanitize_title( $args['slug'] );
 			}
-			$result = wp_insert_term( $args['name'], $taxonomy, $create );
+			// wp_insert_term() unslashes the name and description.
+			$result = wp_insert_term( wp_slash( (string) $args['name'] ), $taxonomy, wp_slash( $create ) );
 			if ( is_wp_error( $result ) ) {
-				throw new Exception( $result->get_error_message() );
+				WPMCP_Errors::from_wp_error( $result, WPMCP_Errors::CONFLICT, 'A term with that name or slug may already exist. Check list_terms.' );
 			}
 			$term_id = (int) $result['term_id'];
+			WPMCP_Journal::note( sprintf( 'Term %d created by save_term is not deleted by undo. Delete it with delete_term if it is not wanted.', $term_id ) );
 		}
 		if ( ! empty( $args['meta'] ) && is_array( $args['meta'] ) ) {
 			foreach ( $args['meta'] as $k => $v ) {
-				update_term_meta( $term_id, $k, $v );
+				WPMCP_Journal::term_meta( $term_id, $k );
+				update_term_meta( $term_id, $k, wp_slash( $v ) );
 			}
 		}
 		if ( ! empty( $args['seo'] ) && is_array( $args['seo'] ) ) {
+			WPMCP_Journal::term_seo( $term_id, $taxonomy );
 			WPMCP_SEO::set_term_seo( $term_id, $taxonomy, $args['seo'] );
 		}
 		return [
@@ -1424,12 +1498,17 @@ trait WPMCP_Content_Tools {
 	private function tool_delete_term( $args ) {
 		$term_id  = (int) $args['term_id'];
 		$taxonomy = (string) $args['taxonomy'];
+		WPMCP_Journal::note( sprintf( 'Term %d deleted by delete_term is not restored by undo.', $term_id ) );
 		$result   = wp_delete_term( $term_id, $taxonomy );
 		if ( is_wp_error( $result ) ) {
-			throw new Exception( $result->get_error_message() );
+			WPMCP_Errors::from_wp_error( $result, WPMCP_Errors::INVALID_ARGUMENT, 'Check the taxonomy slug with list_taxonomies.' );
 		}
 		if ( ! $result ) {
-			throw new Exception( 'Term not found or could not be deleted' );
+			WPMCP_Errors::fail(
+				WPMCP_Errors::NOT_FOUND,
+				sprintf( 'Term %d was not found in "%s", or it is the default term and cannot be deleted.', $term_id, $taxonomy ),
+				'Check the term_id with list_terms. The default category cannot be deleted.'
+			);
 		}
 		return [ 'success' => true, 'term_id' => $term_id ];
 	}
@@ -1443,16 +1522,42 @@ trait WPMCP_Content_Tools {
 		$type = $args['object_type'] ?? '';
 		switch ( $type ) {
 			case 'post':
-				return get_post_meta( $oid );
+				$this->require_content_post( $oid );
+				$meta = get_post_meta( $oid );
+				break;
 			case 'term':
-				return get_term_meta( $oid );
+				$this->require_term( $oid );
+				$meta = get_term_meta( $oid );
+				break;
 			case 'user':
 				// User meta (emails, capabilities) is outside "Content & SEO".
 				$this->require_user_object_access();
-				return get_user_meta( $oid );
+				$this->require_meta_user( $oid );
+				$meta = get_user_meta( $oid );
+				break;
 			default:
-				throw new Exception( 'object_type must be post, term, or user' );
+				$this->fail_meta_object_type( $type );
 		}
+		return $this->present_meta( $meta );
+	}
+
+	/**
+	 * Shape a get_*_meta() result for the client: serialized values are
+	 * shown as the arrays they stand for, and an empty set is still an
+	 * object ({}), not a JSON list, so the result has one stable shape.
+	 *
+	 * @param mixed $meta Raw result of get_post_meta() and friends.
+	 * @return array|stdClass
+	 */
+	private function present_meta( $meta ) {
+		if ( ! is_array( $meta ) || ! $meta ) {
+			return new stdClass();
+		}
+		$out = [];
+		foreach ( $meta as $key => $values ) {
+			$out[ $key ] = array_map( 'maybe_unserialize', (array) $values );
+		}
+		return $out;
 	}
 
 	/**
@@ -1462,20 +1567,31 @@ trait WPMCP_Content_Tools {
 	private function tool_set_meta( $args ) {
 		$oid  = (int) $args['object_id'];
 		$type = $args['object_type'] ?? '';
+		WPMCP_Util::assert_meta_key_allowed( (string) $args['key'], (string) $type );
+		$args['value'] = WPMCP_Util::decode_value( $args['value'] ?? '', $args['value_format'] ?? 'raw', 'value' );
+		// Core unslashes meta values on the way in; slash so a backslash in
+		// the value (a Windows path, a JSON escape) is stored as sent.
+		$value = wp_slash( $args['value'] );
 		switch ( $type ) {
 			case 'post':
-				update_post_meta( $oid, $args['key'], $args['value'] );
+				$this->require_content_post( $oid );
+				WPMCP_Journal::post_meta( $oid, $args['key'] );
+				update_post_meta( $oid, $args['key'], $value );
 				break;
 			case 'term':
-				update_term_meta( $oid, $args['key'], $args['value'] );
+				$this->require_term( $oid );
+				WPMCP_Journal::term_meta( $oid, $args['key'] );
+				update_term_meta( $oid, $args['key'], $value );
 				break;
 			case 'user':
 				// Writing user meta can set wp_capabilities (role escalation).
-				$this->require_user_object_access();
-				update_user_meta( $oid, $args['key'], $args['value'] );
+				$this->require_user_object_access( true );
+				$this->require_meta_user( $oid );
+				WPMCP_Journal::note( sprintf( 'User meta "%s" on user %d is not restored by undo.', $args['key'], $oid ) );
+				update_user_meta( $oid, $args['key'], $value );
 				break;
 			default:
-				throw new Exception( 'object_type must be post, term, or user' );
+				$this->fail_meta_object_type( $type );
 		}
 		return [ 'success' => true ];
 	}
@@ -1488,19 +1604,26 @@ trait WPMCP_Content_Tools {
 		$oid  = (int) $args['object_id'];
 		$key  = (string) $args['key'];
 		$type = $args['object_type'] ?? '';
+		WPMCP_Util::assert_meta_key_allowed( $key, (string) $type );
 		switch ( $type ) {
 			case 'post':
+				$this->require_content_post( $oid );
+				WPMCP_Journal::post_meta( $oid, $key );
 				delete_post_meta( $oid, $key );
 				break;
 			case 'term':
+				$this->require_term( $oid );
+				WPMCP_Journal::term_meta( $oid, $key );
 				delete_term_meta( $oid, $key );
 				break;
 			case 'user':
-				$this->require_user_object_access();
+				$this->require_user_object_access( true );
+				$this->require_meta_user( $oid );
+				WPMCP_Journal::note( sprintf( 'User meta "%s" deleted from user %d is not restored by undo.', $key, $oid ) );
 				delete_user_meta( $oid, $key );
 				break;
 			default:
-				throw new Exception( 'object_type must be post, term, or user' );
+				$this->fail_meta_object_type( $type );
 		}
 		return [ 'success' => true ];
 	}
@@ -1543,6 +1666,9 @@ trait WPMCP_Content_Tools {
 		}
 
 		$result = WPMCP_Media::ingest( $source, $opts );
+		if ( empty( $result['reused'] ) ) {
+			WPMCP_Journal::note( sprintf( 'Attachment %d added by upload_media is not deleted by undo. Use delete_media.', (int) $result['id'] ) );
+		}
 
 		return array_merge(
 			[ 'success' => true, 'attachment_id' => $result['id'] ],
@@ -1630,10 +1756,15 @@ trait WPMCP_Content_Tools {
 		$id = (int) $args['attachment_id'];
 		$p  = get_post( $id );
 		if ( ! $p || 'attachment' !== $p->post_type ) {
-			throw new Exception( 'Attachment not found' );
+			$this->fail_attachment_missing( $id );
 		}
+		WPMCP_Journal::note( sprintf( 'Attachment %d and its files deleted by delete_media are not restored by undo.', $id ) );
 		if ( ! wp_delete_attachment( $id, true ) ) {
-			throw new Exception( 'Delete failed' );
+			WPMCP_Errors::fail(
+				WPMCP_Errors::IO_FAILED,
+				sprintf( 'Attachment %d could not be deleted.', $id ),
+				'Check that the uploads folder is writable and see get_error_log.'
+			);
 		}
 		return [ 'success' => true, 'attachment_id' => $id ];
 	}
@@ -1644,12 +1775,13 @@ trait WPMCP_Content_Tools {
 	 */
 	private function tool_set_image_alt( $args ) {
 		$id = (int) $args['attachment_id'];
-		if ( ! get_post( $id ) ) {
-			throw new Exception( 'Attachment not found' );
+		$p  = get_post( $id );
+		if ( ! $p || 'attachment' !== $p->post_type ) {
+			$this->fail_attachment_missing( $id );
 		}
 		if ( isset( $args['alt_text'] ) ) {
 			WPMCP_Journal::post_meta( $id, '_wp_attachment_image_alt' );
-			update_post_meta( $id, '_wp_attachment_image_alt', sanitize_text_field( $args['alt_text'] ) );
+			update_post_meta( $id, '_wp_attachment_image_alt', wp_slash( sanitize_text_field( $args['alt_text'] ) ) );
 		}
 		$update = [ 'ID' => $id ];
 		if ( isset( $args['title'] ) ) {
@@ -1662,7 +1794,8 @@ trait WPMCP_Content_Tools {
 			$update['post_content'] = $args['description'];
 		}
 		if ( count( $update ) > 1 ) {
-			wp_update_post( $update );
+			WPMCP_Journal::post_fields( $id, array_keys( array_diff_key( $update, [ 'ID' => 1 ] ) ) );
+			wp_update_post( wp_slash( $update ) );
 		}
 		return [ 'success' => true, 'id' => $id ];
 	}
@@ -1674,13 +1807,15 @@ trait WPMCP_Content_Tools {
 	private function tool_set_featured_image( $args ) {
 		$id    = (int) $args['id'];
 		$thumb = (int) $args['attachment_id'];
-		if ( ! get_post( $id ) ) {
-			throw new Exception( 'Post not found' );
-		}
+		$this->require_content_post( $id );
 		if ( $thumb > 0 ) {
-			if ( ! wp_attachment_is_image( $thumb ) && ! get_post( $thumb ) ) {
-				throw new Exception( 'Attachment not found' );
+			$attachment = get_post( $thumb );
+			if ( ! $attachment || 'attachment' !== $attachment->post_type ) {
+				$this->fail_attachment_missing( $thumb );
 			}
+		}
+		WPMCP_Journal::post_meta( $id, '_thumbnail_id' );
+		if ( $thumb > 0 ) {
 			set_post_thumbnail( $id, $thumb );
 		} else {
 			delete_post_thumbnail( $id );
@@ -1694,9 +1829,7 @@ trait WPMCP_Content_Tools {
 	 */
 	private function tool_list_revisions( $args ) {
 		$id = (int) $args['id'];
-		if ( ! get_post( $id ) ) {
-			throw new Exception( 'Content not found' );
-		}
+		$this->require_content_post( $id );
 		$out = [];
 		foreach ( wp_get_post_revisions( $id ) as $rev ) {
 			$out[] = [
@@ -1719,11 +1852,22 @@ trait WPMCP_Content_Tools {
 		$rev_id = (int) $args['revision_id'];
 		$rev    = wp_get_post_revision( $rev_id );
 		if ( ! $rev ) {
-			throw new Exception( 'Revision not found' );
+			WPMCP_Errors::fail(
+				WPMCP_Errors::NOT_FOUND,
+				sprintf( 'Revision %d was not found.', $rev_id ),
+				'Call list_revisions with the post ID for the revisions that exist.',
+				[ 'revision_id' => $rev_id ]
+			);
 		}
+		$this->require_content_post( (int) $rev->post_parent );
+		WPMCP_Journal::post_fields( (int) $rev->post_parent, [ 'post_title', 'post_content', 'post_excerpt' ] );
 		$result = wp_restore_post_revision( $rev_id );
 		if ( ! $result ) {
-			throw new Exception( 'Restore failed — the revision may match the current content already' );
+			WPMCP_Errors::fail(
+				WPMCP_Errors::CONFLICT,
+				sprintf( 'Revision %d could not be restored.', $rev_id ),
+				'The revision may already match the current content. Compare it with list_revisions.'
+			);
 		}
 		return [
 			'success'   => true,
@@ -1773,9 +1917,15 @@ trait WPMCP_Content_Tools {
 		$cid     = (int) $args['comment_id'];
 		$comment = get_comment( $cid );
 		if ( ! $comment ) {
-			throw new Exception( 'Comment not found' );
+			WPMCP_Errors::fail(
+				WPMCP_Errors::NOT_FOUND,
+				sprintf( 'Comment %d was not found.', $cid ),
+				'Call list_comments for the comment IDs that exist.',
+				[ 'comment_id' => $cid ]
+			);
 		}
 		$action = (string) $args['action'];
+		WPMCP_Journal::note( sprintf( 'Comment changes made by moderate_comment (%s on comment %d) are not restored by undo.', $action, $cid ) );
 
 		switch ( $action ) {
 			case 'approve':
@@ -1801,22 +1951,25 @@ trait WPMCP_Content_Tools {
 				break;
 			case 'edit':
 				if ( ! isset( $args['content'] ) ) {
-					throw new Exception( 'content is required for action=edit' );
+					WPMCP_Errors::fail( WPMCP_Errors::MISSING_ARGUMENT, 'content is required for action=edit.', 'Pass the new comment body as content.' );
 				}
+				// wp_update_comment() unslashes its input.
 				$res = wp_update_comment(
-					[
-						'comment_ID'      => $cid,
-						'comment_content' => $args['content'],
-					],
+					wp_slash(
+						[
+							'comment_ID'      => $cid,
+							'comment_content' => (string) $args['content'],
+						]
+					),
 					true
 				);
 				if ( is_wp_error( $res ) ) {
-					throw new Exception( $res->get_error_message() );
+					WPMCP_Errors::from_wp_error( $res, WPMCP_Errors::INVALID_ARGUMENT );
 				}
 				break;
 			case 'reply':
 				if ( empty( $args['content'] ) ) {
-					throw new Exception( 'content is required for action=reply' );
+					WPMCP_Errors::fail( WPMCP_Errors::MISSING_ARGUMENT, 'content is required for action=reply.', 'Pass the reply body as content.' );
 				}
 				$author_id = (int) ( $args['author_id'] ?? 0 );
 				if ( ! $author_id ) {
@@ -1824,23 +1977,30 @@ trait WPMCP_Content_Tools {
 					$author_id = $admins ? (int) $admins[0] : 0;
 				}
 				$user     = $author_id ? get_userdata( $author_id ) : null;
+				// wp_insert_comment() unslashes its input.
 				$reply_id = wp_insert_comment(
-					[
-						'comment_post_ID'      => (int) $comment->comment_post_ID,
-						'comment_parent'       => $cid,
-						'comment_content'      => $args['content'],
-						'user_id'              => $author_id,
-						'comment_author'       => $user ? $user->display_name : get_bloginfo( 'name' ),
-						'comment_author_email' => $user ? $user->user_email : '',
-						'comment_approved'     => 1,
-					]
+					wp_slash(
+						[
+							'comment_post_ID'      => (int) $comment->comment_post_ID,
+							'comment_parent'       => $cid,
+							'comment_content'      => (string) $args['content'],
+							'user_id'              => $author_id,
+							'comment_author'       => $user ? $user->display_name : get_bloginfo( 'name' ),
+							'comment_author_email' => $user ? $user->user_email : '',
+							'comment_approved'     => 1,
+						]
+					)
 				);
 				if ( ! $reply_id ) {
-					throw new Exception( 'Reply could not be created' );
+					WPMCP_Errors::fail( WPMCP_Errors::IO_FAILED, 'The reply could not be created.', 'Check get_error_log for a database or plugin error.' );
 				}
 				return [ 'success' => true, 'comment_id' => $cid, 'reply_id' => $reply_id ];
 			default:
-				throw new Exception( 'Unknown action: ' . $action );
+				WPMCP_Errors::fail(
+					WPMCP_Errors::INVALID_ARGUMENT,
+					sprintf( 'Unknown action "%s".', $action ),
+					'Use one of approve, unapprove, spam, unspam, trash, untrash, delete, edit or reply.'
+				);
 		}
 
 		return [ 'success' => true, 'comment_id' => $cid, 'action' => $action ];
@@ -1971,7 +2131,7 @@ trait WPMCP_Content_Tools {
 				$issues[] = 'Focus keyword missing from the URL slug.';
 			}
 			if ( $density > 3 ) {
-				$issues[] = sprintf( 'Keyword density high (%.2f%%) — risk of over-optimisation.', $density );
+				$issues[] = sprintf( 'Keyword density high (%.2f%%): risk of over-optimisation.', $density );
 			} elseif ( 0 === $kw_count ) {
 				$issues[] = 'Focus keyword never appears in the body.';
 			}
@@ -1979,24 +2139,24 @@ trait WPMCP_Content_Tools {
 		if ( '' === $seo['description'] ) {
 			$issues[] = 'Missing meta description.';
 		} elseif ( $desc_len > 160 ) {
-			$issues[] = sprintf( 'Meta description long (%d characters) — may truncate in SERP.', $desc_len );
+			$issues[] = sprintf( 'Meta description long (%d characters) and may truncate in SERP.', $desc_len );
 		} elseif ( $desc_len < 70 ) {
 			$issues[] = sprintf( 'Meta description short (%d characters).', $desc_len );
 		}
 		if ( $title_len > 60 ) {
-			$issues[] = sprintf( 'SEO title long (%d characters) — may truncate.', $title_len );
+			$issues[] = sprintf( 'SEO title long (%d characters) and may truncate.', $title_len );
 		}
 		if ( 0 === $counts['h1'] && 0 === $counts['h2'] ) {
-			$issues[] = 'No H1/H2 headings — weak content structure.';
+			$issues[] = 'No H1/H2 headings: weak content structure.';
 		}
 		if ( $img_no_alt > 0 ) {
 			$issues[] = sprintf( '%d image(s) missing alt text.', $img_no_alt );
 		}
 		if ( 0 === $internal ) {
-			$issues[] = 'No internal links — add some for topical authority.';
+			$issues[] = 'No internal links. Add some for topical authority.';
 		}
 		if ( ! empty( $seo['noindex'] ) ) {
-			$issues[] = 'Page is set to noindex — it will not rank.';
+			$issues[] = 'Page is set to noindex, so it will not rank.';
 		}
 
 		$score = max( 0, 100 - ( count( $issues ) * 8 ) );
@@ -2138,7 +2298,7 @@ trait WPMCP_Content_Tools {
 			'over_width'     => $truncated,
 			'next_offset'    => $next < $total ? $next : null,
 			'next_step'      => $dry
-				? 'Dry run — nothing was written. Anything listed in over_width will be cut off in the SERP; shorten the template, then call again with dry_run=false.'
+				? 'Dry run: nothing was written. Anything listed in over_width will be cut off in the SERP; shorten the template, then call again with dry_run=false.'
 				: ( $next < $total ? sprintf( 'Call again with offset=%d for the next batch.', $next ) : 'All matching posts have been written.' ),
 		];
 	}
@@ -2273,7 +2433,7 @@ trait WPMCP_Content_Tools {
 			'device'    => $device,
 			'limits'    => $this->serp_limits( $device ),
 			'previews'  => $results,
-			'note'      => 'Widths are estimated from Google\'s rendering font (Arial 20px titles, 14px descriptions). Treat them as close, not exact — Google also rewrites titles and descriptions at its own discretion.',
+			'note'      => 'Widths are estimated from Google\'s rendering font (Arial 20px titles, 14px descriptions). Treat them as close, not exact. Google also rewrites titles and descriptions at its own discretion.',
 		];
 	}
 
@@ -2324,7 +2484,7 @@ trait WPMCP_Content_Tools {
 			'truncated'    => null !== $cut_at,
 			'displayed'    => null !== $cut_at ? rtrim( join( '', array_slice( $chars, 0, max( 0, $cut_at - 1 ) ) ) ) . '…' : $text,
 			'advice'       => null !== $cut_at
-				? sprintf( 'Over budget by about %dpx — trim roughly %d characters.', (int) round( $width - $budget ), max( 1, count( $chars ) - $cut_at ) )
+				? sprintf( 'Over budget by about %dpx. Trim roughly %d characters.', (int) round( $width - $budget ), max( 1, count( $chars ) - $cut_at ) )
 				: ( $width < $budget * 0.6 ? 'Well under the limit; there is room to say more.' : 'Fits.' ),
 		];
 	}
@@ -2438,9 +2598,9 @@ trait WPMCP_Content_Tools {
 				break;
 
 			case 'Product':
-				// For a real WooCommerce product, build the complete object —
-				// identifiers, brand, variants, price validity, shipping and
-				// returns — not the bare name/price pair Google now warns about.
+				// For a real WooCommerce product, build the complete object
+				// (identifiers, brand, variants, price validity, shipping and
+				// returns), not the bare name/price pair Google now warns about.
 				if ( function_exists( 'wc_get_product' ) && wc_get_product( $id ) ) {
 					$built    = WPMCP_Schema::product( $id, [] );
 					$schema   = $built['schema'];
@@ -2498,7 +2658,7 @@ trait WPMCP_Content_Tools {
 			'schema'    => $schema,
 			'warnings'  => $warnings,
 			'next_step' => $warnings
-				? 'The schema is valid but incomplete — see warnings. For products, generate_product_schema takes the missing policy facts as arguments.'
+				? 'The schema is valid but incomplete; see warnings. For products, generate_product_schema takes the missing policy facts as arguments.'
 				: ( $applied ? 'Written. Validate it with Google\'s Rich Results Test.' : 'Call again with apply=true to store it on the post.' ),
 		];
 	}
@@ -2571,6 +2731,7 @@ trait WPMCP_Content_Tools {
 	private function tool_manage_robots_txt( $args ) {
 		$action = $args['action'] ?? 'get';
 		if ( 'set' === $action ) {
+			WPMCP_Journal::option( WPMCP_Frontend::ROBOTS_OPTION );
 			update_option( WPMCP_Frontend::ROBOTS_OPTION, (string) ( $args['content'] ?? '' ) );
 			return [ 'success' => true, 'url' => home_url( '/robots.txt' ) ];
 		}
@@ -2632,6 +2793,7 @@ trait WPMCP_Content_Tools {
 				)
 			);
 			$map[] = [ 'from' => $from, 'to' => $to, 'code' => $code ];
+			WPMCP_Journal::option( WPMCP_Frontend::REDIRECT_OPTION );
 			update_option( WPMCP_Frontend::REDIRECT_OPTION, $map );
 			return [ 'success' => true, 'redirects' => $map ];
 		}
@@ -2651,8 +2813,9 @@ trait WPMCP_Content_Tools {
 				)
 			);
 			if ( count( $map ) === $before ) {
-				WPMCP_Errors::fail( WPMCP_Errors::NOT_FOUND, sprintf( 'No redirect is stored for "%s".', $from ) );
+				WPMCP_Errors::fail( WPMCP_Errors::NOT_FOUND, sprintf( 'No redirect is stored for "%s".', $from ), 'Call manage_redirects with action=list to see the stored sources.' );
 			}
+			WPMCP_Journal::option( WPMCP_Frontend::REDIRECT_OPTION );
 			update_option( WPMCP_Frontend::REDIRECT_OPTION, $map );
 			return [ 'success' => true, 'redirects' => $map ];
 		}
@@ -2676,14 +2839,235 @@ trait WPMCP_Content_Tools {
 	}
 
 	/**
+	 * Post types that hold private records rather than content: orders and
+	 * refunds (customer names, addresses, payment details), subscriptions,
+	 * GDPR export/erasure requests, unsaved Customizer drafts and cached
+	 * oEmbed responses. The generic content tools must not read or change
+	 * them; orders have dedicated, scoped WooCommerce tools.
+	 *
+	 * @var string[]
+	 */
+	private static $private_post_types = [
+		'shop_order',
+		'shop_order_refund',
+		'shop_order_placehold',
+		'shop_subscription',
+		'user_request',
+		'customize_changeset',
+		'oembed_cache',
+	];
+
+	/**
+	 * Whether the content tools may touch a post type.
+	 *
+	 * @param string $post_type Post type slug.
+	 * @return bool
+	 */
+	private function is_content_post_type( $post_type ) {
+		$post_type = (string) $post_type;
+		return post_type_exists( $post_type ) && ! in_array( $post_type, self::$private_post_types, true );
+	}
+
+	/**
+	 * Refuse a post type the content tools must not touch.
+	 *
+	 * @param string $post_type Post type slug.
+	 * @throws WPMCP_Tool_Exception When the type is private or not registered.
+	 */
+	private function assert_content_post_type( $post_type ) {
+		$post_type = (string) $post_type;
+		if ( in_array( $post_type, self::$private_post_types, true ) ) {
+			$is_order = in_array( $post_type, [ 'shop_order', 'shop_order_refund', 'shop_order_placehold', 'shop_subscription' ], true );
+			WPMCP_Errors::fail(
+				WPMCP_Errors::PERMISSION_DENIED,
+				sprintf( '"%s" holds private records, so the content tools cannot read or change it.', $post_type ),
+				$is_order
+					? 'Use the WooCommerce order tools (list_orders, get_order, update_order, add_order_note, refund_order) instead. They apply the order scope of this connection.'
+					: 'This data type is internal to WordPress and is not exposed through the content tools.',
+				[ 'post_type' => $post_type ]
+			);
+		}
+		if ( ! post_type_exists( $post_type ) ) {
+			WPMCP_Errors::fail(
+				WPMCP_Errors::INVALID_ARGUMENT,
+				sprintf( 'Post type "%s" is not registered on this site.', $post_type ),
+				'Call list_post_types for the registered types. Content of a type whose plugin has been deactivated cannot be used until the plugin is active again.',
+				[ 'post_type' => $post_type ]
+			);
+		}
+	}
+
+	/**
+	 * Validate a post_type query argument ("any", one slug, a comma list or
+	 * an array) and return it in the form WP_Query expects. "any" is safe as
+	 * is: WP_Query expands it to searchable types only, which excludes the
+	 * private ones above.
+	 *
+	 * @param mixed $value Raw argument.
+	 * @return string|string[]
+	 */
+	private function content_post_type_arg( $value ) {
+		$types = is_array( $value ) ? $value : WPMCP_Util::to_array( (string) $value );
+		$types = array_values( array_filter( array_map( 'sanitize_key', $types ) ) );
+		if ( ! $types || in_array( 'any', $types, true ) ) {
+			return 'any';
+		}
+		foreach ( $types as $type ) {
+			$this->assert_content_post_type( $type );
+		}
+		return 1 === count( $types ) ? $types[0] : $types;
+	}
+
+	/**
+	 * Load a post the content tools may work on, or fail with a typed error.
+	 *
+	 * @param int $id Post ID.
+	 * @return WP_Post
+	 * @throws WPMCP_Tool_Exception When missing or of a private type.
+	 */
+	private function require_content_post( $id ) {
+		$id   = (int) $id;
+		$post = $id > 0 ? get_post( $id ) : null;
+		if ( ! $post ) {
+			WPMCP_Errors::fail(
+				WPMCP_Errors::NOT_FOUND,
+				sprintf( 'Content %d was not found.', $id ),
+				'Check the ID with list_content (or list_products for products).',
+				[ 'id' => $id ]
+			);
+		}
+		$this->assert_content_post_type( $post->post_type );
+		return $post;
+	}
+
+	/**
+	 * Fail unless a term exists (optionally in a given taxonomy).
+	 *
+	 * @param int    $term_id  Term ID.
+	 * @param string $taxonomy Taxonomy slug, or '' for any.
+	 * @return WP_Term
+	 * @throws WPMCP_Tool_Exception When the term does not exist.
+	 */
+	private function require_term( $term_id, $taxonomy = '' ) {
+		$term = get_term( (int) $term_id, (string) $taxonomy );
+		if ( ! $term instanceof WP_Term ) {
+			WPMCP_Errors::fail(
+				WPMCP_Errors::NOT_FOUND,
+				'' !== $taxonomy
+					? sprintf( 'Term %d was not found in "%s".', (int) $term_id, $taxonomy )
+					: sprintf( 'Term %d was not found.', (int) $term_id ),
+				'Call list_terms with the taxonomy for the term IDs that exist.',
+				[ 'term_id' => (int) $term_id, 'taxonomy' => $taxonomy ]
+			);
+		}
+		return $term;
+	}
+
+	/**
+	 * Fail unless a user exists, for the user branch of the meta tools.
+	 *
+	 * @param int $user_id User ID.
+	 * @throws WPMCP_Tool_Exception When the user does not exist.
+	 */
+	private function require_meta_user( $user_id ) {
+		if ( ! get_userdata( (int) $user_id ) ) {
+			WPMCP_Errors::fail(
+				WPMCP_Errors::NOT_FOUND,
+				sprintf( 'User %d was not found.', (int) $user_id ),
+				'Call list_users for the user IDs that exist.',
+				[ 'user_id' => (int) $user_id ]
+			);
+		}
+	}
+
+	/**
+	 * @param mixed $date The unparseable date argument.
+	 * @throws WPMCP_Tool_Exception Always.
+	 */
+	private function fail_bad_date( $date ) {
+		WPMCP_Errors::fail(
+			WPMCP_Errors::INVALID_ARGUMENT,
+			sprintf( 'Could not parse the date "%s".', is_scalar( $date ) ? (string) $date : gettype( $date ) ),
+			'Pass a date such as 2026-10-01 09:00 or an ISO 8601 timestamp.',
+			[ 'argument' => 'date' ]
+		);
+	}
+
+	/**
+	 * @throws WPMCP_Tool_Exception Always.
+	 */
+	private function fail_term_taxonomy_missing() {
+		WPMCP_Errors::fail(
+			WPMCP_Errors::MISSING_ARGUMENT,
+			'taxonomy is required when object_type is term.',
+			'Pass the taxonomy slug, e.g. category or product_cat. list_taxonomies shows them all.'
+		);
+	}
+
+	/**
+	 * @param mixed $type The object_type that was passed.
+	 * @throws WPMCP_Tool_Exception Always.
+	 */
+	private function fail_meta_object_type( $type ) {
+		WPMCP_Errors::fail(
+			WPMCP_Errors::INVALID_ARGUMENT,
+			sprintf( 'object_type must be post, term or user, got "%s".', is_scalar( $type ) ? (string) $type : gettype( $type ) ),
+			'Pass object_type=post, term or user.',
+			[ 'allowed' => [ 'post', 'term', 'user' ] ]
+		);
+	}
+
+	/**
+	 * @param int $id The attachment ID that was not found.
+	 * @throws WPMCP_Tool_Exception Always.
+	 */
+	private function fail_attachment_missing( $id ) {
+		WPMCP_Errors::fail(
+			WPMCP_Errors::NOT_FOUND,
+			sprintf( 'Attachment %d was not found.', (int) $id ),
+			'Call list_media for the attachment IDs in the media library.',
+			[ 'attachment_id' => (int) $id ]
+		);
+	}
+
+	/**
+	 * Escape the "/" delimiter in a regex body without double-escaping one
+	 * the caller already escaped. A blanket str_replace turned "\/" into
+	 * "\\/", i.e. a literal backslash followed by the end of the pattern.
+	 *
+	 * @param string $body Pattern body without delimiters.
+	 * @return string
+	 */
+	private function escape_regex_delimiter( $body ) {
+		$out = '';
+		$len = strlen( $body );
+		for ( $i = 0; $i < $len; $i++ ) {
+			$char = $body[ $i ];
+			if ( '\\' === $char ) {
+				// Keep the escape and whatever it escapes, verbatim.
+				$out .= $char . ( $i + 1 < $len ? $body[ ++$i ] : '' );
+				continue;
+			}
+			$out .= '/' === $char ? '\/' : $char;
+		}
+		return $out;
+	}
+
+	/**
 	 * Gate user-object meta behind the Site Management capability so the
 	 * default-on Content group cannot read emails or escalate roles.
 	 *
 	 * @throws Exception When site_mgmt is disabled.
 	 */
-	private function require_user_object_access() {
-		if ( ! WPMCP_Settings::can( 'site_mgmt' ) ) {
-			throw new Exception( 'Reading or writing user meta requires the "Site Management" capability to be enabled.' );
+	private function require_user_object_access( $write = false ) {
+		// The connection itself must include Site Management, not just the
+		// site: a writer or read-only key must never reach user records.
+		if ( ! $this->connection_allows( 'site_mgmt', $write ) ) {
+			WPMCP_Errors::fail(
+				WPMCP_Errors::CAPABILITY_DISABLED,
+				'Reading or writing user meta requires the Site Management capability on this connection.',
+				'Enable Site Management in settings and use a key whose preset or groups include it.'
+			);
 		}
 	}
 }

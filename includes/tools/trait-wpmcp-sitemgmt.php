@@ -1,7 +1,7 @@
 <?php
 /**
  * Site management tools: plugins, themes, users, options, cron, and
- * permalinks. Off by default — this group can change what the site runs.
+ * permalinks. Off by default, because this group can change what the site runs.
  *
  * @package WordPressMCP
  */
@@ -128,7 +128,8 @@ trait WPMCP_SiteMgmt_Tools {
 					'type'       => 'object',
 					'properties' => [
 						'name'     => [ 'type' => 'string' ],
-						'value'    => [],
+						'value'    => [ 'type' => 'string', '_accept_any' => true, 'description' => 'Option value. Strings are stored as-is. For a number, boolean, array or object, pass its JSON and set value_format=json (a native JSON value is also accepted).' ],
+						'value_format' => [ 'type' => 'string', 'enum' => [ 'raw', 'json' ], 'description' => 'raw (default): store value exactly as sent. json: decode value from JSON first.' ],
 						'autoload' => [ 'type' => 'boolean', 'description' => 'Whether the option loads on every request.' ],
 					],
 					'required'   => [ 'name', 'value' ],
@@ -137,7 +138,7 @@ trait WPMCP_SiteMgmt_Tools {
 			[
 				'group'       => 'site_mgmt',
 				'name'        => 'delete_option',
-				'description' => 'Delete a wp_options row. Useful for clearing autoload bloat left behind by removed plugins — check it first with get_option.',
+				'description' => 'Delete a wp_options row. Useful for clearing autoload bloat left behind by removed plugins. Check it first with get_option.',
 				'inputSchema' => [
 					'type'       => 'object',
 					'properties' => [ 'name' => [ 'type' => 'string' ] ],
@@ -197,7 +198,7 @@ trait WPMCP_SiteMgmt_Tools {
 				'inputSchema' => [
 					'type'       => 'object',
 					'properties' => [
-						'action' => [ 'type' => 'string', 'description' => 'list|run|unschedule. Default list.' ],
+						'action' => [ 'type' => 'string', 'enum' => [ 'list', 'run', 'unschedule' ], 'description' => 'list|run|unschedule. Default list.' ],
 						'hook'   => [ 'type' => 'string', 'description' => 'Cron hook name for run/unschedule.' ],
 					],
 				],
@@ -209,8 +210,8 @@ trait WPMCP_SiteMgmt_Tools {
 				'inputSchema' => [
 					'type'       => 'object',
 					'properties' => [
-						'action'    => [ 'type' => 'string', 'description' => 'get|set|flush. Default get.' ],
-						'structure' => [ 'type' => 'string', 'description' => 'e.g. /%postname%/ — required for action=set.' ],
+						'action'    => [ 'type' => 'string', 'enum' => [ 'get', 'set', 'flush' ], 'description' => 'get|set|flush. Default get.' ],
+						'structure' => [ 'type' => 'string', 'description' => 'e.g. /%postname%/. Required for action=set.' ],
 						'category_base' => [ 'type' => 'string' ],
 						'tag_base'      => [ 'type' => 'string' ],
 					],
@@ -256,7 +257,7 @@ trait WPMCP_SiteMgmt_Tools {
 			WPMCP_Errors::from_wp_error(
 				$api,
 				WPMCP_Errors::NOT_FOUND,
-				sprintf( 'Check the exact %s slug on wordpress.org — it is the last path segment of its directory URL.', $type )
+				sprintf( 'Check the exact %s slug on wordpress.org; it is the last path segment of its directory URL.', $type )
 			);
 		}
 		$url = is_object( $api ) ? ( $api->download_link ?? '' ) : '';
@@ -314,6 +315,7 @@ trait WPMCP_SiteMgmt_Tools {
 		$slug      = sanitize_key( $args['slug'] );
 		$url       = $this->wporg_package_url( $slug, 'plugin' );
 		$installed = $this->install_package( $url, 'plugin' );
+		WPMCP_Journal::note( sprintf( 'Plugin "%s" installed by install_plugin is not removed by undo. Use deactivate_plugin and delete_plugin.', $slug ) );
 
 		$plugin_file = '';
 		foreach ( get_plugins() as $file => $data ) {
@@ -355,6 +357,7 @@ trait WPMCP_SiteMgmt_Tools {
 				'Use list_plugins to get exact file paths, e.g. "akismet/akismet.php".'
 			);
 		}
+		WPMCP_Journal::note( sprintf( 'Activating "%s" is not reversed by undo. Use deactivate_plugin.', $plugin ) );
 		$result = activate_plugin( $plugin );
 		if ( is_wp_error( $result ) ) {
 			WPMCP_Errors::from_wp_error( $result, WPMCP_Errors::TOOL_FAILED );
@@ -376,10 +379,11 @@ trait WPMCP_SiteMgmt_Tools {
 		if ( plugin_basename( WPMCP_FILE ) === $plugin ) {
 			WPMCP_Errors::fail(
 				WPMCP_Errors::CONFLICT,
-				'WordPress MCP cannot deactivate itself — that would close this connection.',
+				'WordPress MCP cannot deactivate itself, because that would close this connection.',
 				'Deactivate it from the WordPress admin if that is really the intent.'
 			);
 		}
+		WPMCP_Journal::note( sprintf( 'Deactivating "%s" is not reversed by undo. Use activate_plugin.', $plugin ) );
 		deactivate_plugins( $plugin );
 		return [ 'success' => true, 'plugin' => $plugin ];
 	}
@@ -410,6 +414,7 @@ trait WPMCP_SiteMgmt_Tools {
 		$skin     = new Automatic_Upgrader_Skin();
 		$upgrader = new Plugin_Upgrader( $skin );
 		$results  = [];
+		WPMCP_Journal::note( 'Plugin updates are not rolled back by undo.' );
 		foreach ( $targets as $plugin ) {
 			$was_active = is_plugin_active( $plugin );
 			$result     = $upgrader->upgrade( $plugin );
@@ -448,6 +453,7 @@ trait WPMCP_SiteMgmt_Tools {
 		if ( ! WP_Filesystem() ) {
 			WPMCP_Errors::fail( WPMCP_Errors::IO_FAILED, 'WordPress could not initialise its filesystem.' );
 		}
+		WPMCP_Journal::note( sprintf( 'Plugin "%s" deleted by delete_plugin is not restored by undo.', $plugin ) );
 		$result = delete_plugins( [ $plugin ] );
 		if ( is_wp_error( $result ) ) {
 			WPMCP_Errors::from_wp_error( $result, WPMCP_Errors::IO_FAILED );
@@ -463,6 +469,7 @@ trait WPMCP_SiteMgmt_Tools {
 		$slug      = sanitize_key( $args['slug'] );
 		$url       = $this->wporg_package_url( $slug, 'theme' );
 		$installed = $this->install_package( $url, 'theme' );
+		WPMCP_Journal::note( sprintf( 'Theme "%s" installed by install_theme is not removed by undo, and switching to it is not reversed.', $slug ) );
 
 		$activated = false;
 		if ( WPMCP_Util::bool( $args['activate'] ?? null ) ) {
@@ -498,6 +505,7 @@ trait WPMCP_SiteMgmt_Tools {
 		if ( ! $theme->is_allowed() ) {
 			WPMCP_Errors::fail( WPMCP_Errors::PERMISSION_DENIED, 'That theme is not allowed on this site.' );
 		}
+		WPMCP_Journal::note( sprintf( 'Switching away from "%s" is not reversed by undo. Use switch_theme to go back.', get_stylesheet() ) );
 		switch_theme( $stylesheet );
 		return [ 'success' => true, 'active_theme' => get_stylesheet() ];
 	}
@@ -522,6 +530,7 @@ trait WPMCP_SiteMgmt_Tools {
 		if ( ! WP_Filesystem() ) {
 			WPMCP_Errors::fail( WPMCP_Errors::IO_FAILED, 'WordPress could not initialise its filesystem.' );
 		}
+		WPMCP_Journal::note( sprintf( 'Theme "%s" deleted by delete_theme is not restored by undo.', $stylesheet ) );
 		$result = delete_theme( $stylesheet );
 		if ( is_wp_error( $result ) ) {
 			WPMCP_Errors::from_wp_error( $result, WPMCP_Errors::IO_FAILED );
@@ -535,6 +544,7 @@ trait WPMCP_SiteMgmt_Tools {
 	 */
 	private function tool_get_option( $args ) {
 		$name  = (string) $args['name'];
+		$this->assert_option_accessible( $name );
 		$value = get_option( $name );
 		return [
 			'name'    => $name,
@@ -550,8 +560,11 @@ trait WPMCP_SiteMgmt_Tools {
 	 */
 	private function tool_update_option( $args ) {
 		$name     = (string) $args['name'];
+		$this->assert_option_accessible( $name );
 		$autoload = isset( $args['autoload'] ) ? WPMCP_Util::bool( $args['autoload'] ) : null;
-		update_option( $name, $args['value'], $autoload );
+		$value    = WPMCP_Util::decode_value( $args['value'], $args['value_format'] ?? 'raw', 'value' );
+		WPMCP_Journal::option( $name );
+		update_option( $name, $value, $autoload );
 		return [ 'success' => true, 'name' => $name ];
 	}
 
@@ -569,10 +582,57 @@ trait WPMCP_SiteMgmt_Tools {
 				'Deleting it would revoke this connection. Regenerate the key from the settings screen instead.'
 			);
 		}
+		$this->assert_option_accessible( $name );
+		$sentinel = '__wpmcp_absent__';
+		if ( $sentinel === get_option( $name, $sentinel ) ) {
+			WPMCP_Errors::fail( WPMCP_Errors::NOT_FOUND, sprintf( 'Option "%s" does not exist.', $name ), 'Check the exact option name with get_option or list_autoloaded_options.' );
+		}
+		WPMCP_Journal::option( $name );
 		if ( ! delete_option( $name ) ) {
-			WPMCP_Errors::fail( WPMCP_Errors::NOT_FOUND, sprintf( 'Option "%s" does not exist.', $name ) );
+			WPMCP_Errors::fail( WPMCP_Errors::IO_FAILED, sprintf( 'Option "%s" could not be deleted.', $name ), 'A plugin may be filtering it. Check get_error_log.' );
 		}
 		return [ 'success' => true, 'name' => $name ];
+	}
+
+	/**
+	 * Whether an option holds a secret that no connection may read or change
+	 * through the generic option tools: this plugin's own state (API keys,
+	 * token hashes, OAuth clients, the backup token and the undo journal all
+	 * live under "wpmcp_") and the WordPress salts, which sign every login
+	 * cookie and nonce on the site.
+	 *
+	 * @param string $name Option name.
+	 * @return bool
+	 */
+	private function is_protected_option( $name ) {
+		$name = strtolower( trim( (string) $name ) );
+		if ( 0 === strpos( $name, 'wpmcp_' ) ) {
+			return true;
+		}
+		return in_array(
+			$name,
+			[ 'auth_key', 'auth_salt', 'secure_auth_key', 'secure_auth_salt', 'logged_in_key', 'logged_in_salt', 'nonce_key', 'nonce_salt', 'secret_key' ],
+			true
+		);
+	}
+
+	/**
+	 * Refuse a protected option.
+	 *
+	 * @param string $name Option name.
+	 * @throws WPMCP_Tool_Exception When the option is protected.
+	 */
+	private function assert_option_accessible( $name ) {
+		if ( $this->is_protected_option( $name ) ) {
+			WPMCP_Errors::fail(
+				WPMCP_Errors::PERMISSION_DENIED,
+				sprintf( 'Option "%s" holds credentials or security keys, so it cannot be read or changed through the option tools.', $name ),
+				0 === strpos( strtolower( trim( (string) $name ) ), 'wpmcp_' )
+					? 'Manage WordPress MCP settings, keys and connections from its settings screen in wp-admin. Use list_operations and undo_operation for the undo journal.'
+					: 'WordPress salts are set in wp-config.php or regenerated by a security plugin, never through an API.',
+				[ 'name' => $name ]
+			);
+		}
 	}
 
 	/**
@@ -632,7 +692,9 @@ trait WPMCP_SiteMgmt_Tools {
 				WPMCP_Errors::fail( WPMCP_Errors::NOT_FOUND, sprintf( 'User %d does not exist.', $id ) );
 			}
 			$data['ID'] = $id;
-			$result     = wp_update_user( $data );
+			WPMCP_Journal::note( sprintf( 'Changes to user %d made by save_user are not restored by undo.', $id ) );
+			// wp_update_user() unslashes its input (see slash_user_data()).
+			$result     = wp_update_user( $this->slash_user_data( $data ) );
 		} else {
 			if ( empty( $args['username'] ) || empty( $args['email'] ) ) {
 				WPMCP_Errors::fail( WPMCP_Errors::MISSING_ARGUMENT, 'username and email are required to create a user.' );
@@ -641,7 +703,11 @@ trait WPMCP_SiteMgmt_Tools {
 			if ( empty( $data['user_pass'] ) ) {
 				$data['user_pass'] = wp_generate_password( 24, true, false );
 			}
-			$result = wp_insert_user( $data );
+			// wp_insert_user() unslashes its input (see slash_user_data()).
+			$result = wp_insert_user( $this->slash_user_data( $data ) );
+			if ( ! is_wp_error( $result ) ) {
+				WPMCP_Journal::note( sprintf( 'User %d created by save_user is not deleted by undo.', (int) $result ) );
+			}
 		}
 
 		if ( is_wp_error( $result ) ) {
@@ -663,6 +729,24 @@ trait WPMCP_SiteMgmt_Tools {
 	}
 
 	/**
+	 * Slash user fields for wp_insert_user() / wp_update_user(), which unslash
+	 * them, so a backslash in a name or bio survives. The password is left
+	 * alone: core hashes it before unslashing, so slashing it would silently
+	 * change the password that gets stored.
+	 *
+	 * @param array $data User fields.
+	 * @return array
+	 */
+	private function slash_user_data( $data ) {
+		$pass = array_key_exists( 'user_pass', $data ) ? $data['user_pass'] : null;
+		$data = wp_slash( $data );
+		if ( null !== $pass ) {
+			$data['user_pass'] = $pass;
+		}
+		return $data;
+	}
+
+	/**
 	 * @param array $args Args.
 	 * @return array
 	 */
@@ -681,6 +765,7 @@ trait WPMCP_SiteMgmt_Tools {
 			);
 		}
 		$reassign = ! empty( $args['reassign_to'] ) ? (int) $args['reassign_to'] : null;
+		WPMCP_Journal::note( sprintf( 'User %d deleted by delete_user is not restored by undo.', $id ) );
 		if ( ! wp_delete_user( $id, $reassign ) ) {
 			WPMCP_Errors::fail( WPMCP_Errors::TOOL_FAILED, 'The user could not be deleted.' );
 		}
@@ -741,11 +826,13 @@ trait WPMCP_SiteMgmt_Tools {
 					'The plugin that owns the hook may only register it in another context.'
 				);
 			}
+			WPMCP_Journal::note( sprintf( 'Whatever the "%s" cron hook did when it was run cannot be undone.', $hook ) );
 			do_action( $hook );
 			return [ 'success' => true, 'hook' => $hook, 'note' => 'Hook fired immediately.' ];
 		}
 
 		if ( 'unschedule' === $action ) {
+			WPMCP_Journal::note( sprintf( 'Cron events for "%s" unscheduled by manage_cron are not rescheduled by undo. The owning plugin usually reschedules them on its next load.', $hook ) );
 			$cleared = wp_clear_scheduled_hook( $hook );
 			return [ 'success' => true, 'hook' => $hook, 'events_cleared' => (int) $cleared ];
 		}
@@ -768,18 +855,24 @@ trait WPMCP_SiteMgmt_Tools {
 					'A good default is /%postname%/.'
 				);
 			}
+			// Queue the rewrite flush first: undo replays newest first, so this
+			// runs after the options below have been put back.
+			WPMCP_Journal::rewrite_flush();
+			WPMCP_Journal::option( 'permalink_structure' );
 			update_option( 'permalink_structure', (string) $args['structure'] );
 			if ( isset( $args['category_base'] ) ) {
+				WPMCP_Journal::option( 'category_base' );
 				update_option( 'category_base', (string) $args['category_base'] );
 			}
 			if ( isset( $args['tag_base'] ) ) {
+				WPMCP_Journal::option( 'tag_base' );
 				update_option( 'tag_base', (string) $args['tag_base'] );
 			}
 			flush_rewrite_rules();
 			return [
 				'success'   => true,
 				'structure' => get_option( 'permalink_structure' ),
-				'note'      => 'Rewrite rules flushed. Existing URLs change — add redirects with manage_redirects if the old ones were indexed.',
+				'note'      => 'Rewrite rules flushed. Existing URLs change, so add redirects with manage_redirects if the old ones were indexed.',
 			];
 		}
 

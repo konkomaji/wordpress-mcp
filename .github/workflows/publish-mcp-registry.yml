@@ -1,0 +1,35 @@
+# Publishes server.json to the official MCP Registry.
+# Run it by hand from the Actions tab (Publish to MCP Registry, Run workflow).
+# To publish on every release instead, add:  push: tags: ["v*"]
+# Authenticates with GitHub OIDC, which owns the io.github.konkomaji/* namespace.
+name: Publish to MCP Registry
+
+on:
+  workflow_dispatch:
+
+permissions:
+  id-token: write # Required for OIDC authentication with the registry.
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check server.json matches the plugin version
+        run: |
+          plugin=$(grep -oP "define\( 'WPMCP_VERSION', '\K[^']+" wordpress-mcp.php)
+          listed=$(jq -r .version server.json)
+          echo "plugin=$plugin server.json=$listed tag=${GITHUB_REF_NAME}"
+          test "$plugin" = "$listed" || { echo "::error::server.json version ($listed) does not match wordpress-mcp.php ($plugin)"; exit 1; }
+
+      - name: Install mcp-publisher
+        run: |
+          curl -L "https://github.com/modelcontextprotocol/registry/releases/latest/download/mcp-publisher_$(uname -s | tr '[:upper:]' '[:lower:]')_$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/').tar.gz" | tar xz mcp-publisher
+
+      - name: Log in with GitHub OIDC
+        run: ./mcp-publisher login github-oidc
+
+      - name: Publish
+        run: ./mcp-publisher publish
