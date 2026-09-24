@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="assets/banner.svg" alt="WordPress MCP: one endpoint for every MCP-capable AI" width="100%" />
+<img src="assets/banner-v2.svg" alt="WordPress MCP: one endpoint for every MCP-capable AI" width="100%" />
 
 <br/>
 
