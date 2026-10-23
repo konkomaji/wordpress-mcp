@@ -5,7 +5,7 @@ Tags: mcp, ai, seo, woocommerce, ai agents
 Requires at least: 5.6
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 2.0.0
+Stable tag: 2.1.0
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -111,6 +111,14 @@ Not to run. The plugin is a server: your AI client connects in. Some individual 
 
 == Changelog ==
 
+= 2.1.0 =
+* New: pairs with PSEOEWP, the open source SEO, AEO and GEO plugin from the same developer. When PSEOEWP is active, get_seo, set_seo and bulk_set_seo read and write PSEOEWP fields (with Yoast, Rank Math and SEOPress data shown through), and undo covers them.
+* New: four tools that appear only when PSEOEWP is active: ai_readiness_audit (score and fixes for answer engines), set_short_answer (a quotable 40 to 60 word answer), ai_visibility_report (visits from AI assistants, AI and search crawler visits, content coverage) and pseoewp_settings.
+* manage_redirects stores rules in PSEOEWP when it is active, adding 410 Gone and regex rules. Rules saved earlier keep working and are listed as legacy.
+* manage_llms_txt and indexnow_submit use PSEOEWP's llms.txt and IndexNow when those are switched on there, so the site has one source of truth and no double pings.
+* seo_status reports PSEOEWP and what it can do.
+* Without PSEOEWP nothing changes: the new tools are hidden and refused, and every other tool works as in 2.0.0.
+
 = 2.0.0 =
 * Works with every MCP client, not just Claude. Tested with the official MCP TypeScript and Python SDKs and Claude Code, and connection-verified with Gemini CLI. The settings screen has a new "Connect an AI client" panel with ready-to-paste configuration for Claude Code, Claude web and desktop, ChatGPT, OpenAI Codex, Gemini CLI, Cursor, VS Code / Copilot, Windsurf, Zed, Cline, and anything else via mcp-remote.
 * Transport follows the MCP Streamable HTTP specification for every protocol revision from 2024-11-05 to 2026-07-28. Version negotiation on initialize; stateless server/discover; GET and DELETE answer 405; notifications answer 202 with no body; MCP-Protocol-Version is validated; batches are answered; parse errors use -32700.
@@ -189,6 +197,9 @@ Not to run. The plugin is a server: your AI client connects in. Some individual 
 * Initial release. JSON-RPC MCP endpoint, ~46 tools, engine-agnostic SEO, WooCommerce, Google Site Kit, JSON-LD, llms.txt, capability groups, Material 3 admin UI.
 
 == Upgrade Notice ==
+
+= 2.1.0 =
+Pairs with PSEOEWP, the SEO, AEO and GEO plugin from the same developer: AI readiness audits, short answers and an AI visibility report for your agent. Nothing changes on sites without PSEOEWP.
 
 = 2.0.0 =
 Works with every MCP client (ChatGPT, Codex, Gemini CLI, Cursor, Copilot, Windsurf and more) alongside Claude. Fixes set_meta / update_option being rejected by strict clients, and makes search_replace_content undoable. Adds prompts, resources, search/fetch, tool annotations and per-connection tool scoping. Existing connections keep working unchanged.
