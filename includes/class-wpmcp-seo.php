@@ -1,8 +1,9 @@
 <?php
 /**
- * Engine-agnostic SEO layer. Detects Yoast SEO or Rank Math and reads/writes a
- * single normalised field set so the MCP client never has to know which plugin
- * is installed.
+ * Engine-agnostic SEO layer. Detects Yoast SEO, Rank Math or PSEOEWP and
+ * reads/writes a single normalised field set so the MCP client never has to
+ * know which plugin is installed. With PSEOEWP (same developer) every read and
+ * write goes through its public API, see PSEOEWP docs/PAIRING.md.
  *
  * Normalised SEO fields:
  *   title, description, focus_keyword, canonical, noindex (bool),
@@ -24,7 +25,7 @@ class WPMCP_SEO {
 	/**
 	 * Detect the active SEO engine.
 	 *
-	 * @return string yoast|rankmath|none
+	 * @return string yoast|rankmath|pseoewp|none
 	 */
 	public static function provider() {
 		if ( defined( 'WPSEO_VERSION' ) || class_exists( 'WPSEO_Options' ) ) {
@@ -33,7 +34,19 @@ class WPMCP_SEO {
 		if ( class_exists( 'RankMath' ) || defined( 'RANK_MATH_VERSION' ) ) {
 			return 'rankmath';
 		}
+		if ( self::pseoewp() ) {
+			return 'pseoewp';
+		}
 		return 'none';
+	}
+
+	/**
+	 * Whether PSEOEWP's public API (version 1 or later) is available.
+	 *
+	 * @return bool
+	 */
+	public static function pseoewp() {
+		return defined( 'PSEOEWP_API_VERSION' ) && PSEOEWP_API_VERSION >= 1 && class_exists( 'PSEOEWP_API' );
 	}
 
 	/**
@@ -47,9 +60,11 @@ class WPMCP_SEO {
 			'active_provider' => $provider,
 			'yoast_active'    => ( defined( 'WPSEO_VERSION' ) || class_exists( 'WPSEO_Options' ) ),
 			'rankmath_active' => ( class_exists( 'RankMath' ) || defined( 'RANK_MATH_VERSION' ) ),
+			'pseoewp_active'  => self::pseoewp(),
+			'pseoewp'         => self::pseoewp() ? PSEOEWP_API::capabilities() : null,
 			'note'            => 'none' === $provider
 				? 'No supported SEO plugin detected. SEO writes are stored as standard post meta but may not render until Yoast or Rank Math is active.'
-				: sprintf( 'Writing through %s field keys.', $provider ),
+				: ( 'pseoewp' === $provider ? 'Writing through PSEOEWP. Its AI readiness, short answer and AI visibility tools are available too.' : sprintf( 'Writing through %s field keys.', $provider ) ),
 		];
 	}
 
@@ -61,6 +76,9 @@ class WPMCP_SEO {
 	 * @return string[]
 	 */
 	public static function post_meta_keys() {
+		if ( 'pseoewp' === self::provider() ) {
+			return array_merge( PSEOEWP_API::capabilities()['post_meta_keys'], [ '_pseoewp_answer' ] );
+		}
 		if ( 'rankmath' === self::provider() ) {
 			return [
 				'rank_math_title',
@@ -103,6 +121,9 @@ class WPMCP_SEO {
 	 * @return string[]
 	 */
 	public static function term_meta_keys() {
+		if ( 'pseoewp' === self::provider() ) {
+			return PSEOEWP_API::capabilities()['term_meta_keys'];
+		}
 		return [ 'rank_math_title', 'rank_math_description', 'rank_math_focus_keyword' ];
 	}
 
@@ -115,6 +136,13 @@ class WPMCP_SEO {
 	public static function get_post_seo( $post_id ) {
 		$post_id  = (int) $post_id;
 		$provider = self::provider();
+
+		if ( 'pseoewp' === $provider ) {
+			$f = PSEOEWP_API::get_seo( $post_id );
+			$sources = $f['_from'] ?? [];
+			unset( $f['_from'] );
+			return [ 'provider' => 'pseoewp' ] + $f + [ 'og_image_id' => 0, 'twitter_image_id' => 0, 'sources' => $sources, 'answer' => PSEOEWP_API::answer( $post_id ) ];
+		}
 
 		if ( 'rankmath' === $provider ) {
 			$robots = get_post_meta( $post_id, 'rank_math_robots', true );
@@ -170,6 +198,12 @@ class WPMCP_SEO {
 		$post_id  = (int) $post_id;
 		$provider = self::provider();
 		$fields   = self::normalise_image_fields( $fields );
+
+		if ( 'pseoewp' === $provider ) {
+			unset( $fields['og_image_id'], $fields['twitter_image_id'] );
+			PSEOEWP_API::set_seo( $post_id, $fields );
+			return self::get_post_seo( $post_id );
+		}
 
 		if ( 'rankmath' === $provider ) {
 			$map = [
@@ -239,6 +273,12 @@ class WPMCP_SEO {
 		$term_id  = (int) $term_id;
 		$provider = self::provider();
 
+		if ( 'pseoewp' === $provider ) {
+			$f = PSEOEWP_API::get_seo( $term_id, 'term' );
+			unset( $f['_from'] );
+			return [ 'provider' => 'pseoewp' ] + $f;
+		}
+
 		if ( 'rankmath' === $provider ) {
 			return [
 				'provider'      => 'rankmath',
@@ -270,6 +310,11 @@ class WPMCP_SEO {
 	public static function set_term_seo( $term_id, $taxonomy, $fields ) {
 		$term_id  = (int) $term_id;
 		$provider = self::provider();
+
+		if ( 'pseoewp' === $provider ) {
+			PSEOEWP_API::set_seo( $term_id, (array) $fields, 'term' );
+			return self::get_term_seo( $term_id, $taxonomy );
+		}
 
 		if ( 'rankmath' === $provider ) {
 			if ( array_key_exists( 'title', $fields ) ) {

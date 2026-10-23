@@ -337,7 +337,8 @@ trait WPMCP_Content_Tools {
 						'action' => [ 'type' => 'string', 'enum' => [ 'list', 'add', 'delete' ], 'description' => 'list|add|delete. Default list.' ],
 						'from'   => [ 'type' => 'string', 'description' => 'Source path, e.g. /old-page.' ],
 						'to'     => [ 'type' => 'string', 'description' => 'Destination path or URL.' ],
-						'code'   => [ 'type' => 'integer', 'description' => '301|302|307|308. Default 301.' ],
+						'code'   => [ 'type' => 'integer', 'description' => '301|302|307|308, or 410 Gone (PSEOEWP only, no to needed). Default 301.' ],
+						'regex'  => [ 'type' => 'boolean', 'description' => 'PSEOEWP only: treat from as a regular expression; $1 in to uses a captured group.' ],
 					],
 				],
 			],
@@ -1226,6 +1227,23 @@ trait WPMCP_Content_Tools {
 	 */
 	private function tool_manage_llms_txt( $args ) {
 		$action = $args['action'] ?? 'get';
+		if ( WPMCP_SEO::pseoewp() ) {
+			if ( 'set' === $action ) {
+				WPMCP_Journal::rewrite_flush();
+				WPMCP_Journal::option( PSEOEWP_OPTION );
+				PSEOEWP_API::update_settings( [ 'llms_mode' => 'custom', 'llms_custom' => (string) ( $args['content'] ?? '' ) ] );
+				PSEOEWP_LLMS::add_rewrite();
+				flush_rewrite_rules( false );
+			}
+			return [
+				'success'  => true,
+				'engine'   => 'pseoewp',
+				'mode'     => PSEOEWP_Settings::get( 'llms_mode' ),
+				'url'      => home_url( '/llms.txt' ),
+				'content'  => PSEOEWP_LLMS::enabled() ? PSEOEWP_LLMS::build_index() : '',
+				'note'     => PSEOEWP_LLMS::physical_file() ? 'A physical llms.txt file in the site root is served instead of this one. Remove it to use PSEOEWP.' : 'Served by PSEOEWP. Call pseoewp_settings with llms_mode=auto to build it from the content, or pass content here to use your own text.',
+			];
+		}
 		if ( 'set' === $action ) {
 			WPMCP_Journal::option( WPMCP_Frontend::LLMS_OPTION );
 			update_option( WPMCP_Frontend::LLMS_OPTION, (string) ( $args['content'] ?? '' ) );
@@ -2757,6 +2775,9 @@ trait WPMCP_Content_Tools {
 	 */
 	private function tool_manage_redirects( $args ) {
 		$action = $args['action'] ?? 'list';
+		if ( WPMCP_SEO::pseoewp() && PSEOEWP_Settings::get( 'redirects' ) ) {
+			return $this->pseoewp_redirects( $action, $args );
+		}
 		$map    = get_option( WPMCP_Frontend::REDIRECT_OPTION, [] );
 		if ( ! is_array( $map ) ) {
 			$map = [];
