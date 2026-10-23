@@ -755,6 +755,22 @@ trait WPMCP_SEOTech_Tools {
 			];
 		}
 
+		// PSEOEWP owns IndexNow when the site owner turned it on there: one key,
+		// one log, no double pings.
+		if ( WPMCP_SEO::pseoewp() && PSEOEWP_IndexNow::enabled() ) {
+			$code = PSEOEWP_API::indexnow( $urls );
+			if ( is_wp_error( $code ) ) {
+				WPMCP_Errors::from_wp_error( $code, WPMCP_Errors::UPSTREAM_FAILED, 'The server could not reach api.indexnow.org. Check outbound HTTPS is allowed.' );
+			}
+			return [
+				'success' => in_array( (int) $code, [ 200, 202 ], true ),
+				'engine'  => 'pseoewp',
+				'status'  => (int) $code,
+				'count'   => count( $urls ),
+				'urls'    => $urls,
+			];
+		}
+
 		$response = wp_remote_post(
 			'https://api.indexnow.org/indexnow',
 			[

@@ -3,7 +3,7 @@
  * Plugin Name:       WordPress MCP
  * Plugin URI:        https://github.com/konkomaji/wordpress-mcp
  * Description:       Universal Model Context Protocol (MCP) server for WordPress. Connects any site to any MCP-capable AI client (Claude, ChatGPT, OpenAI Codex, Gemini CLI, Cursor, GitHub Copilot in VS Code, Windsurf, Zed, Cline and more) for hands-on SEO / AEO / GEO work, complete WooCommerce store operations, image handling the agent can actually see, site-speed auditing and optimisation, and page-builder aware editing (Elementor, Gutenberg, Divi, WPBakery). Engine-agnostic Yoast or Rank Math, Google Site Kit data, JSON-LD schema, llms.txt, sitemap and broken-link auditing, IndexNow, and full content publishing. Writes are journalled and reversible. Built for digital marketers and agencies.
- * Version:           2.0.0
+ * Version:           2.1.0
  * Requires at least: 5.6
  * Requires PHP:      7.4
  * Author:            Konko Maji
@@ -21,7 +21,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-define( 'WPMCP_VERSION', '2.0.0' );
+define( 'WPMCP_VERSION', '2.1.0' );
 define( 'WPMCP_NAMESPACE', 'wp-mcp/v1' );
 define( 'WPMCP_OPTION', 'wpmcp_settings' );
 define( 'WPMCP_FILE', __FILE__ );

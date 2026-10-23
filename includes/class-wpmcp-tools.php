@@ -21,6 +21,7 @@ require_once WPMCP_DIR . 'includes/tools/trait-wpmcp-content.php';
 require_once WPMCP_DIR . 'includes/tools/trait-wpmcp-search.php';
 require_once WPMCP_DIR . 'includes/tools/trait-wpmcp-ops.php';
 require_once WPMCP_DIR . 'includes/tools/trait-wpmcp-seotech.php';
+require_once WPMCP_DIR . 'includes/tools/trait-wpmcp-pseoewp.php';
 require_once WPMCP_DIR . 'includes/tools/trait-wpmcp-media.php';
 require_once WPMCP_DIR . 'includes/tools/trait-wpmcp-woocommerce.php';
 require_once WPMCP_DIR . 'includes/tools/trait-wpmcp-orders.php';
@@ -41,6 +42,7 @@ class WPMCP_Tools {
 	use WPMCP_Search_Tools;
 	use WPMCP_Ops_Tools;
 	use WPMCP_SEOTech_Tools;
+	use WPMCP_PSEOEWP_Tools;
 	use WPMCP_Media_Tools;
 	use WPMCP_WooCommerce_Tools;
 	use WPMCP_Orders_Tools;
@@ -80,6 +82,7 @@ class WPMCP_Tools {
 				$this->defs_search(),
 				$this->defs_ops(),
 				$this->defs_seotech(),
+				$this->defs_pseoewp(),
 				$this->defs_media(),
 				$this->defs_woocommerce(),
 				$this->defs_orders(),
@@ -106,7 +109,7 @@ class WPMCP_Tools {
 	public function exposed_definitions() {
 		$out = [];
 		foreach ( $this->definitions() as $tool ) {
-			if ( ! $this->is_available( $tool['group'] ) || ! $this->in_scope( $tool['name'], $tool['group'] ) ) {
+			if ( ! $this->is_available( $tool['group'] ) || ! $this->in_scope( $tool['name'], $tool['group'] ) || ! self::requirement_met( $tool ) ) {
 				continue;
 			}
 			$out[] = $this->wire_definition( $tool );
@@ -409,6 +412,20 @@ class WPMCP_Tools {
 	}
 
 	/**
+	 * Whether a tool's companion plugin is present. Tools with no `requires`
+	 * key always pass.
+	 *
+	 * @param array $tool Definition.
+	 * @return bool
+	 */
+	private static function requirement_met( $tool ) {
+		if ( empty( $tool['requires'] ) ) {
+			return true;
+		}
+		return 'pseoewp' === $tool['requires'] && WPMCP_SEO::pseoewp();
+	}
+
+	/**
 	 * Whether a group is both enabled and usable on this site.
 	 *
 	 * @param string $group Group key.
@@ -681,6 +698,15 @@ class WPMCP_Tools {
 					? 'WooCommerce is not active on this site.'
 					: 'Google Site Kit is not active on this site.',
 				[ 'group' => $group ]
+			);
+		}
+
+		if ( ! self::requirement_met( $registry[ $name ]['definition'] ) ) {
+			WPMCP_Errors::fail(
+				WPMCP_Errors::DEPENDENCY_MISSING,
+				sprintf( 'Tool "%s" needs a plugin that is not active here.', $name ),
+				'Install and activate PSEOEWP, the SEO, AEO and GEO plugin that pairs with WordPress MCP: https://github.com/konkomaji/pseoe-wp',
+				[ 'requires' => 'pseoewp' ]
 			);
 		}
 

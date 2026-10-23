@@ -12,7 +12,7 @@ Engine-agnostic **SEO** (Yoast / Rank Math) · **AEO/GEO** (JSON-LD, `llms.txt`,
 <br/>
 
 [![Works with any MCP client](https://img.shields.io/badge/works%20with-any%20MCP%20client-4a5bd4?style=for-the-badge&labelColor=1b1814)](#connect-your-ai-client)
-[![Version](https://img.shields.io/badge/version-2.0.0-21759b?style=for-the-badge&labelColor=1b1814)](https://github.com/konkomaji/wordpress-mcp/releases)
+[![Version](https://img.shields.io/badge/version-2.1.0-21759b?style=for-the-badge&labelColor=1b1814)](https://github.com/konkomaji/wordpress-mcp/releases)
 [![License](https://img.shields.io/badge/license-GPL--2.0-3aa3c9?style=for-the-badge&labelColor=1b1814)](LICENSE)
 
 ![WordPress](https://img.shields.io/badge/WordPress-5.6%2B-21759b?logo=wordpress&logoColor=white)
@@ -770,6 +770,8 @@ The **Content & SEO** group is locked on. It's the reason the plugin exists, and
 
 **Content & SEO (56)**: `search`, `fetch`, `batch`, `list_change_requests`, `list_operations`, `undo_operation`, `create_restore_point`, `find_broken_links`, `get_sitemap`, `sitemap_audit`, `indexnow_submit`, `get_image_bytes`, `list_content`, `get_content`, `publish_content`, `update_content`, `delete_content`, `duplicate_content`, `bulk_update_content`, `search_replace_content`, `get_seo`, `set_seo`, `bulk_set_seo`, `serp_preview`, `set_schema`, `get_schema`, `generate_schema`, `analyze_content`, `internal_link_opportunities`, `manage_llms_txt`, `manage_robots_txt`, `manage_redirects`, `seo_audit`, `list_post_types`, `list_taxonomies`, `list_terms`, `save_term`, `delete_term`, `get_meta`, `set_meta`, `delete_meta`, `upload_media`, `list_media`, `delete_media`, `set_image_alt`, `bulk_set_image_alt`, `set_featured_image`, `optimize_image`, `restore_image`, `regenerate_thumbnails`, `find_duplicate_media`, `find_unused_media`, `list_revisions`, `restore_revision`, `list_comments`, `moderate_comment`
 
+**With PSEOEWP active (4 more)**: `ai_readiness_audit`, `set_short_answer`, `ai_visibility_report`, `pseoewp_settings`. See [PSEOEWP](https://github.com/konkomaji/pseoe-wp).
+
 **WooCommerce catalogue (29)**: `list_products`, `get_product`, `create_product`, `update_product`, `delete_product`, `duplicate_product`, `bulk_update_products`, `list_product_variations`, `save_product_variation`, `delete_product_variation`, `generate_product_variations`, `bulk_assign_variation_images`, `list_product_attributes`, `save_product_attribute`, `list_product_categories`, `save_product_category`, `delete_product_category`, `manage_product_images`, `update_inventory`, `inventory_report`, `product_seo_audit`, `product_seo_fix`, `generate_product_schema`, `list_coupons`, `save_coupon`, `delete_coupon`, `store_report`, `get_store_settings`, `update_store_settings`
 
 **WooCommerce orders & customers (8)**: `list_orders`, `get_order`, `update_order`, `add_order_note`, `refund_order`, `list_customers`, `get_customer`, `customer_insights`
@@ -973,6 +975,8 @@ indexnow_submit    → pushes URLs to Bing, Yandex, Naver and Seznam
 ---
 
 ## AEO / GEO layer
+
+**Pairs with PSEOEWP.** [PSEOEWP](https://github.com/konkomaji/pseoe-wp) is the open source SEO, AEO and GEO plugin from the same developer. When it is active, WordPress MCP writes SEO fields, redirects, llms.txt and IndexNow through PSEOEWP's API, and adds tools to audit pages for answer engines, set quotable short answers and report on visits from AI assistants and crawlers. Ask: "Audit my ten newest posts for AI readiness and fix what you can."
 
 Answer-Engine and Generative-Engine optimisation, managed by the agent and rendered by `WPMCP_Frontend`:
 
@@ -1249,6 +1253,7 @@ Full notes for every version: **[Releases](https://github.com/konkomaji/wordpres
 
 | Version | Headline | Tools |
 |---------|----------|-------|
+| **2.1.0** | Pairs with [PSEOEWP](https://github.com/konkomaji/pseoe-wp), the open source SEO, AEO and GEO plugin from the same developer. With it active, the SEO tools read and write PSEOEWP fields, `manage_redirects` gains 410 and regex rules, llms.txt and IndexNow have one source of truth, and four new tools appear: `ai_readiness_audit`, `set_short_answer`, `ai_visibility_report` and `pseoewp_settings`. Nothing changes without PSEOEWP. | 165 + 4 |
 | **2.0.0** | Works with every MCP client, and teams can share a site safely. Connection keys with presets, read-only access, expiry and approval queues. Sign in with WordPress (OAuth 2.1). A connection test and Site Health checks. `wp mcp` WP-CLI commands. Structured output and live progress. An MCP Registry listing, a new logo, and official client marks. Protocol support: Spec-compliant Streamable HTTP for protocol versions 2024-11-05 through 2026-07-28, including stateless `server/discover`. Tool schemas load in Claude, OpenAI and Gemini, which fixes `set_meta` / `update_option` being rejected. Adds tool annotations and titles; ready-made prompts; `wordpress://` resources; `search` / `fetch`; per-connection `?groups=` scoping; `X-API-Key` auth; compatibility with JWT-style auth plugins; and connection snippets for 11 clients. Undo now covers `search_replace_content`, `update_content`, `set_meta` and `update_option`. | 165 |
 | **1.4.0** | The agent can see images; every write is reversible; 50 calls per request. Media ingest engine (URL / base64 / server path, SEO filenames, de-duplication, WebP), undo journal and restore points, `batch`, broken-link checking, sitemap auditing, IndexNow, Merchant-grade product schema, social-image SEO fields, audit log, live progress and a time budget for long runs. | 162 |
 | **1.3.0** | Page-builder aware editing (Elementor, Gutenberg, Divi, WPBakery), complete WooCommerce store operations including orders and refunds, site-speed audit and optimiser, menus and widgets, structured error handling with syntax-checked file writes and automatic backups. | 140 |

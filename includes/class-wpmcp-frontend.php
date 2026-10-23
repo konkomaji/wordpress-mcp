@@ -186,7 +186,11 @@ class WPMCP_Frontend {
 		if ( ! get_query_var( 'wpmcp_llms' ) ) {
 			return;
 		}
-		$content = get_option( self::LLMS_OPTION, '' );
+		// With PSEOEWP's llms.txt switched on, it is the one source of truth;
+		// both plugins register the same rewrite, so serve PSEOEWP's text here.
+		$content = WPMCP_SEO::pseoewp() && PSEOEWP_LLMS::enabled()
+			? PSEOEWP_LLMS::build_index()
+			: get_option( self::LLMS_OPTION, '' );
 		header( 'Content-Type: text/plain; charset=utf-8' );
 		$this->send_nosniff();
 		if ( '' === $content ) {

@@ -270,7 +270,7 @@ class WPMCP_Journal {
 			return;
 		}
 		unset( $taxonomy );
-		if ( 'rankmath' === WPMCP_SEO::provider() ) {
+		if ( in_array( WPMCP_SEO::provider(), [ 'rankmath', 'pseoewp' ], true ) ) {
 			foreach ( WPMCP_SEO::term_meta_keys() as $key ) {
 				self::term_meta( (int) $term_id, $key );
 			}

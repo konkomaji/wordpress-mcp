@@ -108,6 +108,7 @@ class WPMCP_Audit {
 		'manage_llms_txt'      => [ 'get' ],
 		'manage_robots_txt'    => [ 'get' ],
 		'manage_redirects'     => [ 'list' ],
+		'pseoewp_settings'     => [ 'get' ],
 		'manage_cron'          => [ 'list' ],
 		'manage_permalinks'    => [ 'get' ],
 		'performance_settings' => [ 'get' ],
@@ -180,7 +181,7 @@ class WPMCP_Audit {
 				return true;
 			}
 		}
-		return in_array( $tool, [ 'mcp_status', 'site_info', 'site_health', 'seo_status', 'seo_audit', 'product_seo_audit', 'performance_audit', 'store_report', 'inventory_report', 'customer_insights', 'image_optimization_report', 'sitemap_audit', 'read_file', 'file_info', 'sql_query', 'internal_link_opportunities', 'search', 'fetch' ], true );
+		return in_array( $tool, [ 'mcp_status', 'site_info', 'site_health', 'seo_status', 'seo_audit', 'product_seo_audit', 'performance_audit', 'store_report', 'inventory_report', 'customer_insights', 'image_optimization_report', 'sitemap_audit', 'read_file', 'file_info', 'sql_query', 'internal_link_opportunities', 'search', 'fetch', 'ai_readiness_audit', 'ai_visibility_report' ], true );
 	}
 
 	/**
